@@ -1,0 +1,9 @@
+{
+	"name": "discor-d-ping-pong",
+	"targetType": "executable",
+	"dependencies":{
+		"discor-d": {
+			"path": "../../"
+		}
+	}
+}

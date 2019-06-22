@@ -1,0 +1,13 @@
+{
+	"name": "discor-d",
+	"authors": [
+		"Emily"
+	],
+	"dependencies": {
+		"vibe-d:core": "~>0.8.5",
+		"vibe-d:http": "~>0.8.5"
+	},
+	"description": "An implementation of the Discord bot API without an implementation of voice chat",
+	"copyright": "Copyright © 2017, Emily",
+	"license": "proprietary"
+}

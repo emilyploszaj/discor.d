@@ -1,0 +1,9 @@
+{
+	"name": "discor-d-channel-list",
+	"targetType": "executable",
+	"dependencies":{
+		"discor-d": {
+			"path": "../../"
+		}
+	}
+}
