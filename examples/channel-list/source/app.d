@@ -1,4 +1,5 @@
 import discord.bot;
+import discord.events;
 import discord.types;
 import std.algorithm;
 import std.array;
@@ -40,15 +41,10 @@ class Events: DiscordEvents{
         //Construct an array of lines to be printed
         string[] outer = floaties.filter!(c => c.type == Channel.Type.GuildText).array
             .sort!((a, b) => a.position < b.position)
-            .map!(c => "├#️⃣ " ~ c.name).array;
+            .map!(c => "# " ~ c.name).array;
         outer ~= floaties.filter!(c => c.type == Channel.Type.GuildVoice).array
             .sort!((a, b) => a.position < b.position)
-            .map!(c => "├🔊 " ~ c.name).array;
-
-        //For if there are no categories
-        if(categories.length == 0){
-            outer[$ - 1] = "└" ~ outer[$ - 1][3..$];
-        }
+            .map!(c => "@ " ~ c.name).array;
 
         outer.each!writeln;
 
@@ -56,16 +52,8 @@ class Events: DiscordEvents{
         for(int i = 0; i < categories.length; i++){
             Channel cat = categories[i];
 
-            //Deal with drawing the file connections
-            string sep = "│";
-            if(i + 1 < categories.length) write("├");
-            else{
-                write("└");
-                sep = " ";
-            }
-
             //Write the category name as an insert (either next to a ├ or a └ character)
-            writeln("─▼ " ~ cat.name);
+            writeln(">" ~ cat.name);
 
             //Grab all channels in this category
             Channel[] sub = channels.filter!(c => c.parentId == cat.id).array;
@@ -73,18 +61,11 @@ class Events: DiscordEvents{
             //Construct an array of lines to be printed
             string[] inner = sub.filter!(c => c.type == Channel.Type.GuildText).array
                 .sort!((a, b) => a.position < b.position)
-                .map!(c => sep ~ " ├#️⃣ " ~ c.name).array;
+                .map!(c => " #" ~ c.name).array;
             inner ~= sub.filter!(c => c.type == Channel.Type.GuildVoice).array
                 .sort!((a, b) => a.position < b.position)
-                .map!(c => sep ~ " ├🔊 " ~ c.name).array;
-            
-            //Change the insert character of the last lines
-            if(inner.length > 0){
-                //These are funky gross lines, box drawing characters are actually several characters
-                if(i + 1 < categories.length) inner[$ - 1] = "| └" ~ inner[$ - 1][7..$];
-                else inner[$ - 1] = "  └" ~ inner[$ - 1][5..$];
-            }
-
+                .map!(c => " @" ~ c.name).array;
+			
             inner.each!writeln;
         }
     }
