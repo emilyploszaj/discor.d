@@ -13,10 +13,10 @@ import std.conv;
 import vibe.data.json;
 
 /**
-* A Discord channel (text, voice, category, etc.)
+* A channel (text, voice, category, etc.)
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void tellMeAboutAChannel(Channel channel){
 *		if(channel.type == Channel.Type.GuildText){
@@ -101,10 +101,10 @@ struct Channel{
 	}
 }
 /**
-* A Discord guild
+* A guild
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void tellMeAboutAGuild(Guild guild){
 *		if(guild.large){
@@ -121,24 +121,62 @@ struct Channel{
 * ---
 */
 struct Guild{
+	enum MessageNotificationLevel{
+		AllMessages = 0, OnlyMentions
+	}
+	enum ExplicitContentFilterLevel{
+		Disabled = 0, MembersWithoutRoles, AllMembers
+	}
+	enum MFALevel{
+		None = 0, Elevated
+	}
+	///Verification levels needed to act in a server
+	enum VerificationLevel{
+		None = 0,	///Unresricted
+		Low,		///Must have verified email on account
+		Medium,		///Must be registered on Discord for longer than 5 minutes
+		High,		///Must be a member on the server for longer than 10 minutes
+		VeryHigh	///Must have a verified phone number
+	}
+	///The icon hash of the guild
 	public string icon;
+	///The name of the guild
 	public string name;
+	///The region code the guild is in
 	public string region;
+	///The splash hash of the guild
 	public string splash;
+	///The id of the afk channel
 	public ulong afkChannelId;
+	///The id of the embed channel
 	public ulong embedChannelId;
+	///The id of the guild
 	public ulong id;
+	///The id of the `discord.types.User` who owns the guild
 	public ulong ownerId;
+	///If the guild is embeddable
 	public bool embedEnabled;
+	///If this guild is considered "large"
 	public bool large;
+	///The afk timeout in seconds
 	public int afkTimeout;
-	public int defaultMessageNotificationLevel;
-	public int mfaLevel;
-	public int verificationLevel;
+	///The default method notification level of the guild
+	public MessageNotificationLevel defaultMessageNotificationLevel;
+	///The multi-factor authentication level of the guild
+	public MFALevel mfaLevel;
+	///The verification level of the guild
+	public VerificationLevel verificationLevel;
+	///The explicit content filter level of the guild
+	public ExplicitContentFilterLevel explicitContentFilter;
+	///A list of the ids of all `discord.types.Channel` in the guild
 	public ulong[] channelIds;
-	public Activity[ulong] presences;//TODO not actively updated//TODO make this part of a GuildMember instance
+	///A `discord.types.User` id indexed list of presences in this guild
+	public Activity[ulong] presences;
+	///A list of all `discord.types.Emoji`s in the guild
 	public Emoji[] emojis;
+	///A list of all `discord.types.GuildMember`s in the guild
 	public GuildMember[] members;
+	///A list of all `discord.types.Role`s in the guild
 	public Role[] roles;
 	//TODO features, joined at, voice states (maybe not voice states)
 	this(Json json){
@@ -164,12 +202,22 @@ struct Guild{
 		id.safeAssign(json, "id");
 		ownerId.safeAssign(json, "owner_id");
 		afkTimeout.safeAssign(json, "afk_timeout");
-		defaultMessageNotificationLevel.safeAssign(json, "default_message_notifications");
-		mfaLevel.safeAssign(json, "mfa_level");
-		verificationLevel.safeAssign(json, "verification_level");
+		if(json["default_message_notifications"].type == Json.Type.int_){
+			defaultMessageNotificationLevel = cast(MessageNotificationLevel) json["default_message_notifications"].get!int;
+		}
+		if(json["mfa_level"].type == Json.Type.int_){
+			mfaLevel = cast(MFALevel) json["mfa_level"].get!int;
+		}
+		if(json["verification_level"].type == Json.Type.int_){
+			verificationLevel = cast(VerificationLevel) json["verification_level"].get!int;
+		}
+		if(json["explicit_content_filter"].type == Json.Type.int_){
+			explicitContentFilter = cast(ExplicitContentFilterLevel) json["explicit_content_filter"].get!int;
+		}
 		emojis = json["emojis"][].map!(e => Emoji(e)).array;
 		roles = json["roles"][].map!(r => Role(r)).array;
 	}
+	///A list of all `discord.types.Channel`s in the guild
 	public @property Channel[] channels(){
 		Channel[] c;
 		foreach(i; channelIds){
@@ -177,8 +225,24 @@ struct Guild{
 		}
 		return c;
 	}
+	///If the afk `discord.types.Channel` exists
+	public @property bool hasAfkChannel(){
+		return afkChannelId != 0;
+	}
+	///The afk `discord.types.Channel` if it exists
+	public @property Channel afkChannel(){
+		return getChannel(afkChannelId);
+	}
+	///If the embed `discord.types.Channel` exists
+	public @property bool hasEmbedChannel(){
+		return embedChannelId != 0;
+	}
+	///The embed `discord.types.Channel` if it exists
+	public @property Channel embedChannel(){
+		return getChannel(embedChannelId);
+	}
 }
-///A Discord ban (with optional reason)
+///A ban in a guild
 struct Ban{
 	///The reason for the ban (or an empty string if none provided)
 	public string reason;
@@ -190,10 +254,10 @@ struct Ban{
 	}
 }
 /**
-* A Discord role in a guild
+* A role in a guild
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void roleInfo(Role role){
 *		//Discord doesn't use #000000 as black
@@ -240,220 +304,278 @@ struct Role{
 	}
 }
 ///A permissions structure (wrapper around a bitflag)
-struct Permissions{
+struct Permissions{//TODO maybe properly document this? It seems self-explanatory
 	ulong permissions;
 	this(ulong permissions){
 		this.permissions = permissions;
 	}
+	///
 	public @property bool createInstantInvite(){
 		return (permissions & 0x1) != 0;
 	}
+	///
 	public @property bool kickMembers(){
 		return (permissions & 0x2) != 0;
 	}
+	///
 	public @property bool banMembers(){
 		return (permissions & 0x4) != 0;
 	}
+	///
 	public @property bool administrator(){
 		return (permissions & 0x8) != 0;
 	}
+	///
 	public @property bool manageChannels(){
 		return (permissions & 0x10) != 0;
 	}
+	///
 	public @property bool manageGuild(){
 		return (permissions & 0x20) != 0;
 	}
+	///
 	public @property bool addReactions(){
 		return (permissions & 0x40) != 0;
 	}
+	///
 	public @property bool viewAuditLog(){
 		return (permissions & 0x80) != 0;
 	}
+	///
 	public @property bool viewChannel(){
 		return (permissions & 0x400) != 0;
 	}
+	///
 	public @property bool sendMessages(){
 		return (permissions & 0x800) != 0;
 	}
+	///
 	public @property bool sendTTSMessages(){
 		return (permissions & 0x1000) != 0;
 	}
+	///
 	public @property bool manageMessages(){
 		return (permissions & 0x2000) != 0;
 	}
+	///
 	public @property bool embedLinks(){
 		return (permissions & 0x4000) != 0;
 	}
+	///
 	public @property bool attachFiles(){
 		return (permissions & 0x8000) != 0;
 	}
+	///
 	public @property bool readMessageHistory(){
 		return (permissions & 0x10000) != 0;
 	}
+	///
 	public @property bool messageEveryone(){
 		return (permissions & 0x20000) != 0;
 	}
+	///
 	public @property bool useExternalEmojis(){
 		return (permissions & 0x40000) != 0;
 	}
+	///
 	public @property bool connect(){
 		return (permissions & 0x100000) != 0;
 	}
+	///
 	public @property bool speak(){
 		return (permissions & 0x200000) != 0;
 	}
+	///
 	public @property bool muteMembers(){
 		return (permissions & 0x400000) != 0;
 	}
+	///
 	public @property bool deafenMembers(){
 		return (permissions & 0x800000) != 0;
 	}
+	///
 	public @property bool moveMembers(){
 		return (permissions & 0x1000000) != 0;
 	}
+	///
 	public @property bool useVAD(){
 		return (permissions & 0x2000000) != 0;
 	}
+	///
 	public @property bool prioritySpeaker(){
 		return (permissions & 0x100) != 0;
 	}
+	///
 	public @property bool changeNickname(){
 		return (permissions & 0x4000000) != 0;
 	}
+	///
 	public @property bool manageNicknames(){
 		return (permissions & 0x8000000) != 0;
 	}
+	///
 	public @property bool manageRoles(){
 		return (permissions & 0x10000000) != 0;
 	}
+	///
 	public @property bool manageWebhooks(){
 		return (permissions & 0x10000000) != 0;
 	}
+	///
 	public @property bool manageEmojis(){
 		return (permissions & 0x10000000) != 0;
 	}
+	///
 	public @property void createInstantInvite(bool permission){
 		if(permission) permissions |= 0x1;
 		else permissions &= ~(0x1);
 	}
+	///
 	public @property void kickMembers(bool permission){
 		if(permission) permissions |= 0x2;
 		else permissions &= ~(0x2);
 	}
+	///
 	public @property void banMembers(bool permission){
 		if(permission) permissions |= 0x4;
 		else permissions &= ~(0x4);
 	}
+	///
 	public @property void administrator(bool permission){
 		if(permission) permissions |= 0x8;
 		else permissions &= ~(0x8);
 	}
+	///
 	public @property void manageChannels(bool permission){
 		if(permission) permissions |= 0x10;
 		else permissions &= ~(0x10);
 	}
+	///
 	public @property void manageGuild(bool permission){
 		if(permission) permissions |= 0x20;
 		else permissions &= ~(0x20);
 	}
+	///
 	public @property void addReactions(bool permission){
 		if(permission) permissions |= 0x40;
 		else permissions &= ~(0x40);
 	}
+	///
 	public @property void viewAuditLog(bool permission){
 		if(permission) permissions |= 0x80;
 		else permissions &= ~(0x80);
 	}
+	///
 	public @property void viewChannel(bool permission){
 		if(permission) permissions |= 0x400;
 		else permissions &= ~(0x400);
 	}
+	///
 	public @property void sendMessages(bool permission){
 		if(permission) permissions |= 0x800;
 		else permissions &= ~(0x800);
 	}
+	///
 	public @property void sendTTSMessages(bool permission){
 		if(permission) permissions |= 0x1000;
 		else permissions &= ~(0x1000);
 	}
+	///
 	public @property void manageMessages(bool permission){
 		if(permission) permissions |= 0x2000;
 		else permissions &= ~(0x2000);
 	}
+	///
 	public @property void embedLinks(bool permission){
 		if(permission) permissions |= 0x4000;
 		else permissions &= ~(0x4000);
 	}
+	///
 	public @property void attachFiles(bool permission){
 		if(permission) permissions |= 0x8000;
 		else permissions &= ~(0x8000);
 	}
+	///
 	public @property void readMessageHistory(bool permission){
 		if(permission) permissions |= 0x10000;
 		else permissions &= ~(0x10000);
 	}
+	///
 	public @property void messageEveryone(bool permission){
 		if(permission) permissions |= 0x20000;
 		else permissions &= ~(0x20000);
 	}
+	///
 	public @property void useExternalEmojis(bool permission){
 		if(permission) permissions |= 0x40000;
 		else permissions &= ~(0x40000);
 	}
+	///
 	public @property void connect(bool permission){
 		if(permission) permissions |= 0x100000;
 		else permissions &= ~(0x100000);
 	}
+	///
 	public @property void speak(bool permission){
 		if(permission) permissions |= 0x200000;
 		else permissions &= ~(0x200000);
 	}
+	///
 	public @property void muteMembers(bool permission){
 		if(permission) permissions |= 0x400000;
 		else permissions &= ~(0x400000);
 	}
+	///
 	public @property void deafenMembers(bool permission){
 		if(permission) permissions |= 0x800000;
 		else permissions &= ~(0x800000);
 	}
+	///
 	public @property void moveMembers(bool permission){
 		if(permission) permissions |= 0x1000000;
 		else permissions &= ~(0x1000000);
 	}
+	///
 	public @property void useVAD(bool permission){
 		if(permission) permissions |= 0x2000000;
 		else permissions &= ~(0x2000000);
 	}
+	///
 	public @property void prioritySpeaker(bool permission){
 		if(permission) permissions |= 0x100;
 		else permissions &= ~(0x100);
 	}
+	///
 	public @property void changeNickname(bool permission){
 		if(permission) permissions |= 0x4000000;
 		else permissions &= ~(0x4000000);
 	}
+	///
 	public @property void manageNicknames(bool permission){
 		if(permission) permissions |= 0x8000000;
 		else permissions &= ~(0x8000000);
 	}
+	///
 	public @property void manageRoles(bool permission){
 		if(permission) permissions |= 0x10000000;
 		else permissions &= ~(0x10000000);
 	}
+	///
 	public @property void manageWebhooks(bool permission){
 		if(permission) permissions |= 0x10000000;
 		else permissions &= ~(0x10000000);
 	}
+	///
 	public @property void manageEmojis(bool permission){
 		if(permission) permissions |= 0x10000000;
 		else permissions &= ~(0x10000000);
 	}
 }
 /**
-* A Discord message in a channel
+* A message in a channel
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void processMessage(Message message){
 *		//Check if the message mentions @everyone
@@ -471,6 +593,8 @@ struct Message{
 	}
 	///The text content of the string
 	public string content;
+	///The id of the `discord.types.User` who sent the message
+	public ulong authorId;
 	///The id of the `discord.types.Channel` that the message is in
 	public ulong channelId;
 	///The id of the message
@@ -483,8 +607,6 @@ struct Message{
 	public bool tts;
 	///The type of the message
 	public Type type;
-	///The `discord.types.User` who sent the message
-	public User author;
 	this(Json json){
 		content.safeAssign(json, "content");
 		mentionsEveryone.safeAssign(json, "mention_everyone");
@@ -493,17 +615,22 @@ struct Message{
 		channelId = json["channel_id"].get!string.to!ulong;
 		id = json["id"].get!string.to!ulong;
 		if(json["type"].type == Json.Type.int_) type = cast(Type) json["type"].get!int;
-		if(json["author"].type == Json.Type.object) author = User(json["author"]);
+		if(json["author"].type == Json.Type.object) authorId = json["author"]["id"].get!string.to!ulong;
 	}
+	///The channel this message is in
 	public @property Channel channel(){
 		return getChannel(channelId);
 	}
+	///The `discord.types.User` who sent the message
+	public @property User author(){
+		return getUser(authorId);
+	}
 }
 /**
-* A Discord user in a guild
+* A user in a guild
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void checkNickname(GuildMember member){
 *		//Check if the member has a nickname
@@ -522,13 +649,13 @@ struct GuildMember{
 	public string nick;
 	///The timestamp when the member joined at
 	public string joinedAt;
-	///List of role ids
+	///List of role ids the member has
 	public ulong[] roleIds;
 	///Whether the member is deafened
 	public bool deaf;
-	///Whether the member is deafened
+	///Whether the member is muted
 	public bool mute;
-	///The member's `discord.types.User` object
+	///The id of the member's `discord.types.User`
 	public ulong userId;
 	this(Json json){
 		nick.safeAssign(json, "nick");
@@ -538,15 +665,21 @@ struct GuildMember{
 		roleIds = json["roles"][].map!(r => r.get!string.to!ulong).array;
 		userId = json["user"]["id"].get!string.to!ulong;
 	}
+	///The member's `discord.types.User` instance
 	public @property User user(){
 		return getUser(userId);
 	}
+	///The member's display name, either their nickname or their username if blank
+	public @property string displayName(){
+		if(nick != "") return nick;
+		return user.username;
+	}
 }
 /**
-* A Discord user
+* A user
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void examineUser(User user){
 *		//Print the user's name with discriminator
@@ -624,10 +757,10 @@ struct User{
 	}
 }
 /**
-* A Discord activity on a user, currently lacking rich game info
+* An activity on a user, currently lacking rich game info
 * Examples:
 * ---
-*	import std.stdio;
+*	import std.stdio: writeln;
 *
 *	void checkActivity(Activity activity){
 *		//Print the activity status
@@ -644,11 +777,15 @@ struct User{
 * ---
 */
 struct Activity{//TODO missing rich game info
+	///The different types of activities
 	public enum Type{
 		None = -1, Game = 0, Streaming = 1, Listening = 2
 	}
+	///The name of the activity
 	public string name;
+	///The url of the activity if this activity is a stream (only twitch.tv urls)
 	public string url;
+	///The type of the activity
 	public Type type = Type.None;
 	this(Json json){
 		name = json["name"].get!string;
@@ -657,7 +794,7 @@ struct Activity{//TODO missing rich game info
 	}
 }
 /**
-* A Discord emoji in a guild
+* An emoji in a guild
 * Examples:
 * ---
 *	//Initialized elsewhere
@@ -673,6 +810,7 @@ struct Activity{//TODO missing rich game info
 * ---
 */
 struct Emoji{
+	///The name of the emoji
 	public string name;
 	///The ids of the roles whitelisted for the emoji
 	public ulong[] roleIds;

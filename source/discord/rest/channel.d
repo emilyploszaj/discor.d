@@ -29,7 +29,7 @@ import vibe.http.client;
 *			bot.sendMessage(m.channelId, "hi Ally!");
 *		}
 *
-*		import std.string:indexOf;
+*		import std.string: indexOf;
 *		//React to Grace's messages that contain the word "emoji" in them
 *		if(m.author.username == "Grace" && m.content.indexOf("emoji") != -1){
 *			//Define an Emoji
@@ -112,23 +112,26 @@ mixin template RestChannel(alias requestResponse){
 	* See_Also:
 	*	$(LINK https://discordapp.com/developers/docs/resources/channel#embed-object)
 	*/
-	public bool sendMessage(Channel channel, string message){
-		return sendMessage(channel.id, message);
+	public bool createMessage(Channel channel, string message){
+		return createMessage(channel.id, message);
 	}
 	/// ditto
-	public bool sendMessage(ulong channel, string message){
+	public bool createMessage(ulong channel, string message){
 		return requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message)]), RouteType.Channel, channel);
 	}
 	/// ditto
-	public bool sendMessage(Channel channel, string message, Json embed){
-		return sendMessage(channel.id, message, embed);
+	public bool createMessage(Channel channel, string message, Json embed){
+		return createMessage(channel.id, message, embed);
 	}
 	/// ditto
-	public bool sendMessage(ulong channel, string message, Json embed){
+	public bool createMessage(ulong channel, string message, Json embed){
 		return requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message), "embed": embed]), RouteType.Channel, channel);
 	}
 
-	//TODO maybe change sendMessge to createMessage? or make an alias
+	/**
+	* Alias to `discord.rest.channel.createMessage`
+	*/
+	alias sendMessage = createMessage;
 
 	/**
 	* Adds an emoji reaction to a message

@@ -35,13 +35,14 @@ import vibe.http.client;
 *			bot.addGuildMemberRole(guild, m.author.id, coolRoleId);
 *		}
 *
-*		import std.algorithm.searching:countUntil;
+*		import std.algorithm.searching: countUntil;
+*
 *		//Remove the Cool Role to anyone who says "not cool" who's currently in Cool Role
 *		//It's assumed that this bot is only in one guild
 *		if(m.content == "not cool"){
 *			//Check to see if this author has the Cool Role
 *			if(guild.members.countUntil!(member => member.user.id == m.author.id && member.roles.countUntil(coolRoleId) != -1) != -1){
-*					bot.removeGuildMemberRole(guild, m.author.id, coolRoleId);
+*				bot.removeGuildMemberRole(guild, m.author.id, coolRoleId);
 *			}
 *		}
 *	}

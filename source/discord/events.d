@@ -1,5 +1,7 @@
 /**
 * The event handler for Discord websocket events to be overwritten by library users
+* Authors:
+*	Emily Rose Ploszaj
 */
 module discord.events;
 
@@ -11,7 +13,7 @@ import vibe.http.client;
 * Class to be implemented and overwritten by user to handle events received by the Discord websocket API
 * Examples:
 * ---
-*	//token variable initiallized elsewhere
+*	//token variable initialized elsewhere
 *	DiscordBot bot = new DiscordBot(token, new MyDiscordEvents());
 *
 *	//Custom class to recieve and handle discord events
