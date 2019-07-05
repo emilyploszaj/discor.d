@@ -1,5 +1,6 @@
 import discord.bot;
 import discord.types;
+import discord.events;
 import std.algorithm;
 import std.conv;
 import std.random;
