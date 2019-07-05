@@ -379,7 +379,7 @@ mixin template RestGuild(alias requestResponse){
 	/// ditto
 	public Ban getGuildBan(ulong guild, ulong user){
 		Ban ban;
-		requestResponse("guilds/" ~ to!string(guilds) ~ "/bans/" ~ to!string(user), HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
+		requestResponse("guilds/" ~ to!string(guild) ~ "/bans/" ~ to!string(user), HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
 			ban = Ban(res.readJson());
 		});

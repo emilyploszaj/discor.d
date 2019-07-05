@@ -6,6 +6,7 @@
 module discord.types;
 
 import discord.bot;
+import discord.cache;
 import std.algorithm;
 import std.array;
 import std.conv;
@@ -53,7 +54,7 @@ struct Channel{
 	///The id of the channel
 	public ulong id;
 	///The id of the last message sent in this channel
-	public ulong lastMessageId;//TODO actually update this
+	public ulong lastMessageId;
 	///The id of this channel's parent
 	public ulong parentId;
 	///Whether this channel is not safe for work or not
@@ -70,10 +71,6 @@ struct Channel{
 	public User[] recipients;
 	///The type of channel
 	public Type type;
-	this(Json json, ulong guildId){
-		this.guildId = guildId;
-		this(json);
-	}
 	this(Json json){
 		name.safeAssign(json, "name");
 		topic.safeAssign(json, "topic");
@@ -89,6 +86,19 @@ struct Channel{
 		userLimit.safeAssign(json, "user_limit");
 		if(json["recipients"].type == Json.Type.array) recipients = json["recipients"][].map!(u => User(u)).array;
 	}
+	public @property bool hasGuild(){
+		return guildId != 0;
+	}
+	public @property Guild guild(){
+		if(guildId == 0) throw new Exception("Channel has no guild");
+		return getGuild(guildId);
+	}
+	public @property bool hasParent(){
+		return parentId != 0;
+	}
+	public @property Channel parent(){
+		return getChannel(parentId);
+	}
 }
 /**
 * A Discord guild
@@ -100,16 +110,13 @@ struct Channel{
 *		if(guild.large){
 *			//A very large guild
 *			writeln("This is a very big guild!");
-*			
-*			//Print out the number of channels
-*			writeln("This guild has ", guild.channels.length, " different channels!");
 *		}else{
 *			//A smaller guild
 *			writeln("This is a smaller guild!");
-*			
-*			//Print out the number of channels
-*			writeln("This guild has ", guild.channels.length, " different channels!");
 *		}
+*			
+*		//Print out the number of channels
+*		writeln("This guild has ", guild.channels.length, " different channels!");
 *	}
 * ---
 */
@@ -128,20 +135,19 @@ struct Guild{
 	public int defaultMessageNotificationLevel;
 	public int mfaLevel;
 	public int verificationLevel;
-	public Channel[] channels;
+	public ulong[] channelIds;
+	public Activity[ulong] presences;//TODO not actively updated//TODO make this part of a GuildMember instance
 	public Emoji[] emojis;
-	public Game[ulong] presences;//TODO not actively updated
 	public GuildMember[] members;
 	public Role[] roles;
-	//TODO features, joined at, voice states
+	//TODO features, joined at, voice states (maybe not voice states)
 	this(Json json){
 		updateInfo(json);
-		channels = json["channels"][].map!(c => Channel(c, id)).array;
 		if(json["presences"].type == Json.Type.array){
 			foreach(Json j; json["presences"]){
 				if(j["game"].type == Json.Type.null_) continue;
 				ulong userId = j["user"]["id"].get!string.to!ulong;
-				presences[userId] = Game(j["game"]);
+				presences[userId] = Activity(j["game"]);
 			}
 		}
 		members = json["members"][].map!(m => GuildMember(m)).array;
@@ -163,6 +169,13 @@ struct Guild{
 		verificationLevel.safeAssign(json, "verification_level");
 		emojis = json["emojis"][].map!(e => Emoji(e)).array;
 		roles = json["roles"][].map!(r => Role(r)).array;
+	}
+	public @property Channel[] channels(){
+		Channel[] c;
+		foreach(i; channelIds){
+			c ~= getChannel(i);
+		}
+		return c;
 	}
 }
 ///A Discord ban (with optional reason)
@@ -473,14 +486,17 @@ struct Message{
 	///The `discord.types.User` who sent the message
 	public User author;
 	this(Json json){
-		content = json["content"].get!string;
-		mentionsEveryone = json["mention_everyone"].get!bool;
-		pinned = json["pinned"].get!bool;
-		tts = json["tts"].get!bool;
+		content.safeAssign(json, "content");
+		mentionsEveryone.safeAssign(json, "mention_everyone");
+		pinned.safeAssign(json, "pinned");
+		tts.safeAssign(json, "tts");
 		channelId = json["channel_id"].get!string.to!ulong;
 		id = json["id"].get!string.to!ulong;
-		type = cast(Type) json["type"].get!int;
+		if(json["type"].type == Json.Type.int_) type = cast(Type) json["type"].get!int;
 		if(json["author"].type == Json.Type.object) author = User(json["author"]);
+	}
+	public @property Channel channel(){
+		return getChannel(channelId);
 	}
 }
 /**
@@ -513,20 +529,38 @@ struct GuildMember{
 	///Whether the member is deafened
 	public bool mute;
 	///The member's `discord.types.User` object
-	public User user;
+	public ulong userId;
 	this(Json json){
 		nick.safeAssign(json, "nick");
 		joinedAt.safeAssign(json, "joined_at");
 		deaf = json["deaf"].get!bool;
 		mute = json["mute"].get!bool;
 		roleIds = json["roles"][].map!(r => r.get!string.to!ulong).array;
-		user = User(json["user"]);
+		userId = json["user"]["id"].get!string.to!ulong;
+	}
+	public @property User user(){
+		return getUser(userId);
 	}
 }
-///A user instance
+/**
+* A Discord user
+* Examples:
+* ---
+*	import std.stdio;
+*
+*	void examineUser(User user){
+*		//Print the user's name with discriminator
+*		writeln(user.username ~ "#" ~ user.discriminator);
+*
+*		//Worship Discord employees
+*		if(user.employee) writeln("All hail the mighty Discord employee!");
+*	}
+* ---
+*/
 struct User{
 	///The four digit discriminator of the user
 	public string discriminator;
+	///The email of the user (unavailable without email scope)
 	public string email;
 	///The chosen language option of the user
 	public string locale;
@@ -538,6 +572,7 @@ struct User{
 	public bool bot;
 	///Whether the user has multifactor authentication enabled or not
 	public bool mfaEnabled;
+	///Whether the user is verified
 	public bool verified;
 	///The flags on the account of the user
 	public int flags;
@@ -588,8 +623,27 @@ struct User{
 		return (flags | (1 << 9)) != 0;
 	}
 }
-///A game
-struct Game{//Change this to activity, probably
+/**
+* A Discord activity on a user, currently lacking rich game info
+* Examples:
+* ---
+*	import std.stdio;
+*
+*	void checkActivity(Activity activity){
+*		//Print the activity status
+*		if(activity.type == Activity.Type.None){
+*			writeln("No activity!");
+*		}else if(activity.type == Activity.Type.Game){
+*			writeln("Playing " ~ activity.name);
+*		}else if(activity.type == Activity.Type.Stream){
+*			writeln("Streaming " ~ activity.name ~ " at " ~ activity.url);
+*		}else if(activity.type == Activity.Type.Listening){//Always Spotify
+*			writeln("Listening to " ~ activity.name);
+*		}
+*	}
+* ---
+*/
+struct Activity{//TODO missing rich game info
 	public enum Type{
 		None = -1, Game = 0, Streaming = 1, Listening = 2
 	}
@@ -599,10 +653,25 @@ struct Game{//Change this to activity, probably
 	this(Json json){
 		name = json["name"].get!string;
 		type = cast(Type) json["type"].get!int;
-		if(type == 1) url = json["url"].get!string;
+		if(type == 1) url.safeAssign(json, "url");
 	}
 }
-///An emoji instance
+/**
+* A Discord emoji in a guild
+* Examples:
+* ---
+*	//Initialized elsewhere
+*	DiscordBot bot;
+*
+*	void useEmoji(Emoji emoji, Message message){
+*		//Send a message containing the emoji
+*		bot.sendMessage(message.channelId, "Looking for " ~ emoji.textCode ~ "?");
+*		
+*		//React to a message with the emoji
+*		bot.createReaction(emoji);
+*	}
+* ---
+*/
 struct Emoji{
 	public string name;
 	///The ids of the roles whitelisted for the emoji
@@ -630,13 +699,19 @@ struct Emoji{
 	this(string name){
 		this.name = name;
 	}
-	//Whether the emoji is custom or not
+	///Whether the emoji is custom or not
 	public @property bool custom(){
 		return id != 0;
 	}
+	///The rich name of the emoji in the format name:id, used by reaction endpoints
 	public @property string richName(){
 		if(id == 0) return name;
 		else return name ~ ":" ~ userId.to!string;
+	}
+	///The text code for an emoji, to be used in message content in the format <name:id>
+	public @property string textCode(){
+		if(id == 0) return name;
+		else return "<" ~ name ~ ":" ~ userId.to!string ~ ">";
 	}
 	public const bool opEquals(Emoji e){
 		return name == e.name && id == e.id;

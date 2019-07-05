@@ -245,10 +245,10 @@ class DiscordEvents{
 	*	guild =		The `discord.types.Guild` that the user was updated in
 	*	userId =	The id of the `discord.types.User` whose presence was updated
 	*	roles =		The `discord.types.Role`s the user has
-	*	game =		The `discord.types.Game` the user is playing
+	*	activity =	The `discord.types.Activity` the user is playing
 	*	status =	The status the user has, one of "idle", "dnd", "online", or "offline"
 	*/
-	public void presenceUpdate(Guild guild, ulong userId, Role[] roles, Game game, string status){
+	public void presenceUpdate(Guild guild, ulong userId, Role[] roles, Activity activity, string status){
 	}
 	/**
 	* Called when a user starts typing

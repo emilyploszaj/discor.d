@@ -36,8 +36,8 @@ import vibe.http.client;
 *			Emoji e = Emoji("💁");
 *
 *			//You can also call this method with a string
-*			//bot.addReaction(m, "💁");
-*			bot.addReaction(m, e);
+*			//bot.createReaction(m, "💁");
+*			bot.createReaction(m, e);
 *		}
 *	}
 *	---
