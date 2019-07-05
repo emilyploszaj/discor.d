@@ -21,6 +21,7 @@ module discord.cache;
 
 import discord.types;
 import std.conv;
+import std.typecons;
 
 private Guild[ulong] guilds;
 private Channel[ulong] channels;
@@ -60,11 +61,11 @@ void removeCachedUser(ulong id){//I don't think this should ever be called
 * Returns:
 *	The `discord.types.Channel` specified by its id
 */
-Channel getChannel(ulong id){
+Nullable!Channel getChannel(ulong id){
 	if(id in channels){
-		return channels[id];
+		return cast(Nullable!Channel) channels[id];
 	}else{
-		throw new Exception("Channel id " ~ id.to!string ~ " not located in cache");
+		return Nullable!Channel.init;
 	}
 }
 /**
@@ -74,11 +75,11 @@ Channel getChannel(ulong id){
 * Returns:
 *	The `discord.types.Guild` specified by its id
 */
-Guild getGuild(ulong id){
+Nullable!Guild getGuild(ulong id){
 	if(id in guilds){
-		return guilds[id];
+		return cast(Nullable!Guild) guilds[id];
 	}else{
-		throw new Exception("Guild id " ~ id.to!string ~ " not located in cache");
+		return Nullable!Guild.init;
 	}
 }
 /**
@@ -88,11 +89,11 @@ Guild getGuild(ulong id){
 * Returns:
 *	The `discord.types.User` specified by its id
 */
-User getUser(ulong id){
+Nullable!User getUser(ulong id){
 	if(id in users){
-		return users[id];
+		return cast(Nullable!User) users[id];
 	}else{
-		throw new Exception("User id " ~ id.to!string ~ " not located in cache");
+		return Nullable!User.init;
 	}
 }
 /**

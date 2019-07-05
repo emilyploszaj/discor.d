@@ -10,6 +10,7 @@ import discord.cache;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.typecons;
 import vibe.data.json;
 
 /**
@@ -23,7 +24,7 @@ import vibe.data.json;
 *			//A text channel in a guild
 *			writeln("This is a chat between a lot of people in a guild!");
 *			
-*			//Print out whether it's nsfw or not
+*			//Print out whether it's nsfw
 *			if(channel.nsfw) writeln("This is an NSFW channel, stay out if you're not 18 yet!");
 *			else writeln("This isn't an NSFW channel, feel free to check it out!");
 *		}else if(channel.type == Channel.Type.DM){
@@ -46,29 +47,29 @@ struct Channel{
 		GuildText = 0, DM, GuildVoice, GroupDM, GuildCategory, GuildNews, GuildStore
 	}
 	///The name of the channel
-	public string name;
+	public Nullable!string name;
 	///The topic text displayed under the name
-	public string topic;
-	///The id of the `discord.types.Guild` this channel is in (or 0 if not in a `discord.types.Guild`)
-	public ulong guildId;
+	public Nullable!string topic;
+	///The id of the `discord.types.Guild` this channel is in
+	public Nullable!ulong guildId;
 	///The id of the channel
 	public ulong id;
 	///The id of the last message sent in this channel
-	public ulong lastMessageId;
+	public Nullable!ulong lastMessageId;
 	///The id of this channel's parent
-	public ulong parentId;
-	///Whether this channel is not safe for work or not
-	public bool nsfw;
+	public Nullable!ulong parentId;
+	///Whether this channel is not safe for work
+	public Nullable!bool nsfw;
 	///The bitrate of this channel
-	public int bitrate;
+	public Nullable!int bitrate;
 	///The sidebar position of this channel
-	public int position;
+	public Nullable!int position;
 	///The rate limit each user has in this channel
-	public int rateLimitPerUser;
+	public Nullable!int rateLimitPerUser;
 	///The user limit in this channel
-	public int userLimit;
+	public Nullable!int userLimit;
 	///The list of users participating in a DM
-	public User[] recipients;
+	public Nullable!(User[]) recipients;
 	///The type of channel
 	public Type type;
 	this(Json json){
@@ -86,16 +87,19 @@ struct Channel{
 		userLimit.safeAssign(json, "user_limit");
 		if(json["recipients"].type == Json.Type.array) recipients = json["recipients"][].map!(u => User(u)).array;
 	}
+	///Whether this channel is in a `discord.types.Guild`
 	public @property bool hasGuild(){
-		return guildId != 0;
+		return !guildId.isNull;
 	}
+	///The `discord.types.Guild` that this channel is in
 	public @property Guild guild(){
-		if(guildId == 0) throw new Exception("Channel has no guild");
 		return getGuild(guildId);
 	}
+	///Wheter this channel has a parent channel
 	public @property bool hasParent(){
-		return parentId != 0;
+		return !parentId.isNull;
 	}
+	///The parent channel of this channel
 	public @property Channel parent(){
 		return getChannel(parentId);
 	}
@@ -120,44 +124,47 @@ struct Channel{
 *	}
 * ---
 */
-struct Guild{
+struct Guild{//TODO there seems to be a lot of missing values in here
+	///The default message notification level in a guild
 	enum MessageNotificationLevel{
 		AllMessages = 0, OnlyMentions
 	}
+	///Explicit content filtering level in a guild
 	enum ExplicitContentFilterLevel{
 		Disabled = 0, MembersWithoutRoles, AllMembers
 	}
+	///Multi-factor authentication levels needed in a guild
 	enum MFALevel{
 		None = 0, Elevated
 	}
-	///Verification levels needed to act in a server
+	///Verification levels needed to act in a guild
 	enum VerificationLevel{
 		None = 0,	///Unresricted
 		Low,		///Must have verified email on account
 		Medium,		///Must be registered on Discord for longer than 5 minutes
-		High,		///Must be a member on the server for longer than 10 minutes
+		High,		///Must be a member on the guild for longer than 10 minutes
 		VeryHigh	///Must have a verified phone number
 	}
 	///The icon hash of the guild
-	public string icon;
+	public Nullable!string icon;
 	///The name of the guild
 	public string name;
 	///The region code the guild is in
 	public string region;
 	///The splash hash of the guild
-	public string splash;
+	public Nullable!string splash;
 	///The id of the afk channel
-	public ulong afkChannelId;
+	public Nullable!ulong afkChannelId;
 	///The id of the embed channel
-	public ulong embedChannelId;
+	public Nullable!ulong embedChannelId;
 	///The id of the guild
 	public ulong id;
 	///The id of the `discord.types.User` who owns the guild
 	public ulong ownerId;
-	///If the guild is embeddable
-	public bool embedEnabled;
-	///If this guild is considered "large"
-	public bool large;
+	///Whether the guild is embeddable
+	public Nullable!bool embedEnabled;
+	///Wheter this guild is considered "large"
+	public Nullable!bool large;
 	///The afk timeout in seconds
 	public int afkTimeout;
 	///The default method notification level of the guild
@@ -225,7 +232,7 @@ struct Guild{
 		}
 		return c;
 	}
-	///If the afk `discord.types.Channel` exists
+	///Whether the afk `discord.types.Channel` exists
 	public @property bool hasAfkChannel(){
 		return afkChannelId != 0;
 	}
@@ -233,7 +240,7 @@ struct Guild{
 	public @property Channel afkChannel(){
 		return getChannel(afkChannelId);
 	}
-	///If the embed `discord.types.Channel` exists
+	///Whether the embed `discord.types.Channel` exists
 	public @property bool hasEmbedChannel(){
 		return embedChannelId != 0;
 	}
@@ -245,7 +252,7 @@ struct Guild{
 ///A ban in a guild
 struct Ban{
 	///The reason for the ban (or an empty string if none provided)
-	public string reason;
+	public Nullable!string reason;
 	///A user instance with minimal fields
 	public User user;
 	this(Json json){
@@ -589,7 +596,11 @@ struct Permissions{//TODO maybe properly document this? It seems self-explanator
 struct Message{
 	///The different types of messages (normal messages and special messages discord generates)
 	public enum Type{
-		Default = 0, RecipientAdd, RecipientRemove, Call, ChannelNameChange, ChannelIconChange, ChannelPinnedMessage, GuildMemberJoin
+		Default = 0,
+		RecipientAdd, RecipientRemove, Call,
+		ChannelNameChange, ChannelIconChange, ChannelPinnedMessage, GuildMemberJoin,
+		UserPremiumGuildSubscription, UserPremiumGuildSubscriptionTier1,
+		UserPremiumGuildSubscriptionTier2, UserPremiumGuildSubscriptionTier3,
 	}
 	///The text content of the string
 	public string content;
@@ -645,8 +656,8 @@ struct Message{
 * ---
 */
 struct GuildMember{
-	///The member's guild-specific nickname (or an empty string if none)
-	public string nick;
+	///The member's guild-specific nickname
+	public Nullable!string nick;
 	///The timestamp when the member joined at
 	public string joinedAt;
 	///List of role ids the member has
@@ -669,9 +680,9 @@ struct GuildMember{
 	public @property User user(){
 		return getUser(userId);
 	}
-	///The member's display name, either their nickname or their username if blank
+	///The member's display name, either their username or nickname if present
 	public @property string displayName(){
-		if(nick != "") return nick;
+		if(!nick.isNull) return nick;
 		return user.username;
 	}
 }
@@ -694,23 +705,23 @@ struct User{
 	///The four digit discriminator of the user
 	public string discriminator;
 	///The email of the user (unavailable without email scope)
-	public string email;
+	public Nullable!string email;
 	///The chosen language option of the user
-	public string locale;
+	public Nullable!string locale;
 	///The username of the user
 	public string username;
 	///The id of the user
 	public ulong id;
-	///Whether the user is a bot or not
-	public bool bot;
-	///Whether the user has multifactor authentication enabled or not
-	public bool mfaEnabled;
+	///Whether the user is a bot
+	public Nullable!bool bot;
+	///Whether the user has multifactor authentication enabled
+	public Nullable!bool mfaEnabled;
 	///Whether the user is verified
 	public bool verified;
 	///The flags on the account of the user
-	public int flags;
+	public Nullable!int flags;
 	///The type of premium the user has
-	public int premiumType;
+	public Nullable!int premiumType;
 	this(Json json){
 		discriminator = json["discriminator"].get!string;
 		email.safeAssign(json, "email");
@@ -723,35 +734,35 @@ struct User{
 		flags.safeAssign(json, "flags");
 		premiumType.safeAssign(json, "premium_type");
 	}
-	///Whether the user is a Discord employee or not
+	///Whether the user is a Discord employee
 	public @property bool employee(){
 		return (flags | (1 << 0)) != 0;
 	}
-	///Whether the user is a Discord partner or not
+	///Whether the user is a Discord partner
 	public @property bool partner(){
 		return (flags | (1 << 1)) != 0;
 	}
-	///Whether the user is a HypeSquad Events member or not
+	///Whether the user is a HypeSquad Events member
 	public @property bool hypeSquadEvents(){
 		return (flags | (1 << 2)) != 0;
 	}
-	///Whether the user is a Bug Hunter or not
+	///Whether the user is a Bug Hunter
 	public @property bool bugHunter(){
 		return (flags | (1 << 3)) != 0;
 	}
-	///Whether the user is a House Bravery member or not
+	///Whether the user is a House Bravery member
 	public @property bool houseBravery(){
 		return (flags | (1 << 6)) != 0;
 	}
-	///Whether the user is a House Brilliance member or not
+	///Whether the user is a House Brilliance member
 	public @property bool houseBrilliance(){
 		return (flags | (1 << 7)) != 0;
 	}
-	///Whether the user is a House Balance member or not
+	///Whether the user is a House Balance member
 	public @property bool houseBalance(){
 		return (flags | (1 << 8)) != 0;
 	}
-	///Whether the user is an Early Supporter or not
+	///Whether the user is an Early Supporter
 	public @property bool earlySupporter(){
 		return (flags | (1 << 9)) != 0;
 	}
@@ -779,14 +790,14 @@ struct User{
 struct Activity{//TODO missing rich game info
 	///The different types of activities
 	public enum Type{
-		None = -1, Game = 0, Streaming = 1, Listening = 2
+		Game = 0, Streaming = 1, Listening = 2
 	}
 	///The name of the activity
 	public string name;
 	///The url of the activity if this activity is a stream (only twitch.tv urls)
-	public string url;
+	public Nullable!string url;
 	///The type of the activity
-	public Type type = Type.None;
+	public Nullable!Type type;
 	this(Json json){
 		name = json["name"].get!string;
 		type = cast(Type) json["type"].get!int;
@@ -814,16 +825,16 @@ struct Emoji{
 	public string name;
 	///The ids of the roles whitelisted for the emoji
 	public ulong[] roleIds;
-	///The id of the emoji if custom, 0 otherwise
-	public ulong id;
+	///The id of the emoji if custom
+	public Nullable!ulong id;
 	///The id of the user who created the emoji
-	public ulong userId;
-	///Whether the emoji is animated or not
-	public bool animated;
-	///Whether the emoji is managed or not
-	public bool managed;
-	///Whether the emoji requires colons or not
-	public bool requireColons;
+	public Nullable!ulong userId;
+	///Whether the emoji is animated
+	public Nullable!bool animated;
+	///Whether the emoji is managed
+	public Nullable!bool managed;
+	///Whether the emoji requires colons
+	public Nullable!bool requireColons;
 	this(Json json){
 		name = json["name"].get!string;
 		if(json["id"].type != Json.Type.null_) id = json["id"].get!string.to!ulong;
@@ -837,33 +848,41 @@ struct Emoji{
 	this(string name){
 		this.name = name;
 	}
-	///Whether the emoji is custom or not
+	///Whether the emoji is custom
 	public @property bool custom(){
-		return id != 0;
+		return !id.isNull;
 	}
 	///The rich name of the emoji in the format name:id, used by reaction endpoints
 	public @property string richName(){
-		if(id == 0) return name;
+		if(!custom) return name;
 		else return name ~ ":" ~ userId.to!string;
 	}
 	///The text code for an emoji, to be used in message content in the format <name:id>
 	public @property string textCode(){
-		if(id == 0) return name;
+		if(!custom) return name;
 		else return "<" ~ name ~ ":" ~ userId.to!string ~ ">";
 	}
 	public const bool opEquals(Emoji e){
 		return name == e.name && id == e.id;
 	}
 	public const bool opEquals(string s){
-		return id == 0 && name == s;
+		return id.isNull && name == s;
 	}
 }
 //I haven't decided if I think this is a terrible hack but I think that I've decided that it's terrible
 //Checks that the value exists in the Json before assigning it, probably can cause other problems though
 private void safeAssign(T)(ref T var, Json json, string name){
-	static if(is(T == ulong)){
-		if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!string.to!T;
+	static if(is(T == Nullable!U, U)){
+		static if(is(U == ulong)){
+			if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!string.to!U;
+		}else{
+			if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!U;
+		}
 	}else{
-		if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!T;
+		static if(is(T == ulong)){
+			if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!string.to!T;
+		}else{
+			if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!T;
+		}
 	}
 }
