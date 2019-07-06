@@ -52,7 +52,7 @@ class Events: DiscordEvents{
         for(int i = 0; i < categories.length; i++){
             Channel cat = categories[i];
 
-            //Write the category name as an insert (either next to a ├ or a └ character)
+            //Write the category name as an insert
             writeln(">" ~ cat.name);
 
             //Grab all channels in this category
