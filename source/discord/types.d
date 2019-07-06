@@ -44,7 +44,13 @@ import vibe.data.json;
 struct Channel{
 	///The different types of channels
 	public enum Type{
-		GuildText = 0, DM, GuildVoice, GroupDM, GuildCategory, GuildNews, GuildStore
+		GuildText = 0,	///A text channel in a `discord.types.Guild`
+		DM,				///A direct message between two users
+		GuildVoice,		///A voice channel in a `discord.types.Guild`
+		GroupDM,		///A direct message between several participants
+		GuildCategory,	///A channel category in a `discord.types.Guild`
+		GuildNews,		///A `discord.types.Guild` news channel
+		GuildStore		///A `discord.types.Guild` store channel
 	}
 	///The name of the channel
 	public Nullable!string name;
@@ -120,22 +126,26 @@ struct Channel{
 *		}
 *			
 *		//Print out the number of channels
-*		writeln("This guild has ", guild.channels.length, " different channels!");
+*		writeln("This guild has ", guild.channelIds.length, " different channels!");
 *	}
 * ---
 */
 struct Guild{//TODO there seems to be a lot of missing values in here
 	///The default message notification level in a guild
 	enum MessageNotificationLevel{
-		AllMessages = 0, OnlyMentions
+		AllMessages = 0,///
+		OnlyMentions	///
 	}
 	///Explicit content filtering level in a guild
 	enum ExplicitContentFilterLevel{
-		Disabled = 0, MembersWithoutRoles, AllMembers
+		Disabled = 0,		///
+		MembersWithoutRoles,///
+		AllMembers			///
 	}
 	///Multi-factor authentication levels needed in a guild
 	enum MFALevel{
-		None = 0, Elevated
+		None = 0,	///
+		Elevated	///
 	}
 	///Verification levels needed to act in a guild
 	enum VerificationLevel{
@@ -175,7 +185,7 @@ struct Guild{//TODO there seems to be a lot of missing values in here
 	public VerificationLevel verificationLevel;
 	///The explicit content filter level of the guild
 	public ExplicitContentFilterLevel explicitContentFilter;
-	///A list of the ids of all `discord.types.Channel` in the guild
+	///A list of the ids of all `discord.types.Channel`s in the guild
 	public ulong[] channelIds;
 	///A `discord.types.User` id indexed list of presences in this guild
 	public Activity[ulong] presences;
@@ -596,11 +606,18 @@ struct Permissions{//TODO maybe properly document this? It seems self-explanator
 struct Message{
 	///The different types of messages (normal messages and special messages discord generates)
 	public enum Type{
-		Default = 0,
-		RecipientAdd, RecipientRemove, Call,
-		ChannelNameChange, ChannelIconChange, ChannelPinnedMessage, GuildMemberJoin,
-		UserPremiumGuildSubscription, UserPremiumGuildSubscriptionTier1,
-		UserPremiumGuildSubscriptionTier2, UserPremiumGuildSubscriptionTier3,
+		Default = 0,						///A text message by a user
+		RecipientAdd,						///A notification when a user is added to a group dm
+		RecipientRemove,					///A notification when a user leaves or is removed from a group dm
+		Call,								///A notification when a call is started in a dm
+		ChannelNameChange,					///A notification when a dm's name is changed
+		ChannelIconChange,					///A notification when a dm's icon is changed
+		ChannelPinnedMessage,				///A notification when a message is pinned in a channel
+		GuildMemberJoin,					///A notification when a user joins a guild
+		UserPremiumGuildSubscription,		///A notification when a user nitro boosts a guild
+		UserPremiumGuildSubscriptionTier1,	///A notification when a user nitro boosts a guild to tier 1
+		UserPremiumGuildSubscriptionTier2,	///A notification when a user nitro boosts a guild to tier 2
+		UserPremiumGuildSubscriptionTier3,	///A notification when a user nitro boosts a guild to tier 3
 	}
 	///The text content of the string
 	public string content;
@@ -645,13 +662,16 @@ struct Message{
 *
 *	void checkNickname(GuildMember member){
 *		//Check if the member has a nickname
-*		if(member.nick != ""){
+*		if(!member.nick.isNull){
 *			//The member has a nickname, use that
 *			writeln("This user's display name is ", member.nick);
 *		}else{
 *			//The member doesn't have a nickname, use their username
 *			writeln("This user's display name is ", member.user.username);
 *		}
+*
+*		//Alternatively you can use this method to get a member's display name
+*		//writeln(member.displayName);
 *	}
 * ---
 */
@@ -775,14 +795,14 @@ struct User{
 *
 *	void checkActivity(Activity activity){
 *		//Print the activity status
-*		if(activity.type == Activity.Type.None){
+*		if(activity.type.isNull){
 *			writeln("No activity!");
 *		}else if(activity.type == Activity.Type.Game){
-*			writeln("Playing " ~ activity.name);
+*			writeln("Playing ", activity.name);
 *		}else if(activity.type == Activity.Type.Stream){
-*			writeln("Streaming " ~ activity.name ~ " at " ~ activity.url);
+*			writeln("Streaming ", activity.name, " at ", activity.url);
 *		}else if(activity.type == Activity.Type.Listening){//Always Spotify
-*			writeln("Listening to " ~ activity.name);
+*			writeln("Listening to ", activity.name);
 *		}
 *	}
 * ---
@@ -790,7 +810,9 @@ struct User{
 struct Activity{//TODO missing rich game info
 	///The different types of activities
 	public enum Type{
-		Game = 0, Streaming = 1, Listening = 2
+		Game = 0,		///For when a user is playing a game
+		Streaming = 1,	///For when a user is streaming on Twitch
+		Listening = 2,	///For when a user is listening to music on Spotify
 	}
 	///The name of the activity
 	public string name;
