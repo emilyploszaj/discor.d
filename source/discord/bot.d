@@ -15,15 +15,16 @@
 */
 module discord.bot;
 
+public import discord.cache;
+public import discord.events;
+public import discord.types;
+
 import core.time;
 import core.thread;
-import discord.cache;
-import discord.events;
 import discord.rest.channel;
 import discord.rest.emoji;
 import discord.rest.guild;
 import discord.rest.user;
-import discord.types;
 import std.algorithm;
 import std.conv;
 import std.datetime.stopwatch;
@@ -56,7 +57,7 @@ enum RouteType{
 */
 class DiscordBot{
 	private enum DisconnectResult{
-		None, Resume, Close
+		None, Reconnect, Resume, Close
 	}
 	private struct RateLimitPath{
 		RouteType type;
@@ -79,8 +80,9 @@ class DiscordBot{
 	private string gateway;
 	private string sessionId;
 	private string token;
+	private bool shutDown = false;
 	private int lastAck;
-	private int heartbeatInterval = 10000;//10 seconds before things start going down
+	private int heartbeatInterval;
 	private int seq;
 	private RateLimitInformation[RateLimitPath] rateLimits;
 	private DiscordEvents events;
@@ -99,9 +101,10 @@ class DiscordBot{
 		logger = new FileLogger(stdout, logLevel);
 	}
 	/**
-	* Starts the bot and begins the event loop, this method is blocking
+	* Starts the bot and begins the event loop, this is a blocking method
 	*/
 	public void start(){
+		shutDown = false;
 		HTTPClientResponse res = requestHTTP("https://discordapp.com/api/gateway/bot", (scope HTTPClientRequest req){
 			req.headers.addField("Authorization", "Bot " ~ token);
 		});
@@ -115,8 +118,11 @@ class DiscordBot{
 			connectWebSocket(URL(gateway ~ "/?v=6&encoding=json"), (scope WebSocket ws){
 				dcResult = runLoop(ws, dcResult);
 			});
-			if(dcResult == DisconnectResult.Resume){
-				logger.warning("[discor.d] Heartbeat ACK missed, resuming connection momentarily...");
+			if(dcResult == DisconnectResult.Reconnect){
+				logger.warning("[discor.d] Connection closed, reconnecting momentarily...");
+				Thread.sleep(dur!"msecs"(6000));
+			}else if(dcResult == DisconnectResult.Resume){
+				logger.warning("[discor.d] Connection closed, resuming momentarily...");
 				Thread.sleep(dur!"msecs"(6000));
 			}else if(dcResult == DisconnectResult.Close){
 				logger.fatal("[discor.d] Connection closed, shutting down...");
@@ -124,6 +130,7 @@ class DiscordBot{
 			}
 		}
 	}
+	//TODO add ability to update user status (game status 5 times per minute limit)
 	public DisconnectResult runLoop(WebSocket ws, DisconnectResult dcResult){
 		scope(exit) ws.close();
 		lastAck = 0;
@@ -137,11 +144,10 @@ class DiscordBot{
 					"$device": Json("discor.d")
 				]),
 				"compress": Json(false),
-				"large_threshold": Json(250),
-				"shard": Json([Json(0), Json(1)])
+				"large_threshold": Json(250)
 			])
 		]);
-		StopWatch sw;
+		StopWatch sw;//Please don't yell at me for having "sw" and "ws" as variable names
 		while(ws.connected){
 			if(sw.peek >= msecs(heartbeatInterval)){
 				if(seq == 0) ws.send(Json(["op": Json(1), "d": Json(null)]).toString());
@@ -160,7 +166,8 @@ class DiscordBot{
 					logger.info("[discor.d] Event dispatched from gateway: ", data["t"].get!string);
 					try{
 						if(data["t"].get!string == "READY"){
-							botUser = User(data["d"]["user"]);//TODO store ourselves in the cache?
+							botUser = User(data["d"]["user"]);
+							addCachedUser(botUser);
 							//Turns out private_channels doesn't do or contain anything?
 							sessionId = data["d"]["session_id"].get!string;
 							//TODO probably handle data["d"]["guilds"]
@@ -184,7 +191,7 @@ class DiscordBot{
 							if(channel.guildId != 0){
 								modifyCachedGuild(channel.guildId, (ref Guild g){
 									long i = g.channelIds.countUntil!(c => c == channel.id);
-									g.channelIds.remove(i);
+									g.channelIds = g.channelIds.remove(i);
 								});
 							}
 							events.channelDelete(channel);
@@ -243,7 +250,7 @@ class DiscordBot{
 							modifyCachedGuild(id, (ref Guild g){
 								long i = g.members.countUntil!(m => m.user.id == user.id);
 								member = g.members[i];
-								g.members.remove(i);
+								g.members = g.members.remove(i);
 							});
 							events.guildMemberRemove(getGuild(id), member);
 						}else if(data["t"].get!string == "GUILD_MEMBER_UPDATE"){
@@ -281,7 +288,7 @@ class DiscordBot{
 							modifyCachedGuild(id, (ref Guild g){
 								long i = g.roles.countUntil!(r => r.id == role.id);
 								role = g.roles[i];
-								g.roles.remove(i);
+								g.roles = g.roles.remove(i);
 							});
 							events.guildRoleDelete(getGuild(id), role);
 						}else if(data["t"].get!string == "MESSAGE_CREATE"){
@@ -336,9 +343,7 @@ class DiscordBot{
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
 							events.typingStart(getChannel(channelId), userId);
 						}else if(data["t"].get!string == "USER_UPDATE"){
-							User user = User(data["d"]);
-							if(botUser.id != user.id) throw new Exception("USER_UPDATE not sending bot user info");//TODO remove when I've worked this out
-							botUser = user;
+							botUser = User(data["d"]);
 						//NOTE VOICE_STATE_UPDATE all voice events unhandled
 						//NOTE VOICE_SERVER_UPDATE all voice events unhandled
 						//TODO WEBHOOKS_UPDATE
@@ -346,9 +351,18 @@ class DiscordBot{
 					}catch(Exception e){
 						logger.critical("[discor.d] Unhandled exception in event dispatch:\n", e);
 					}
+					if(shutDown){
+						return DisconnectResult.Close;
+					}
 				}else if(op == 1){//Requested heartbeat
 					ws.send(Json(["op": Json(1), "d": Json(seq)]).toString());
 					lastAck++;
+				}else if(op == 7){//We've been asked nicely to reconnect
+					logger.warning("[discor.d] OP 7: Reconnecting as requested");
+					return DisconnectResult.Reconnect;
+				}else if(op == 9){//We've been asked nicely to reconnect
+					logger.warning("[discor.d] OP 9: Invalid session ID");
+					return DisconnectResult.Reconnect;
 				}else if(op == 10){//Hello
 					if(dcResult == DisconnectResult.Resume){
 						Json resume = Json([
@@ -364,15 +378,54 @@ class DiscordBot{
 					}
 				}else if(op == 11){//Heartbeat ACK
 					lastAck--;
+				}else if(op == 4000){
+					logger.critical("[discor.d] OP 4000: Unknown error");
+					return DisconnectResult.Reconnect;
+				}else if(op == 4001){
+					logger.fatal("[discor.d] OP 4001: Invalid opcode was sent by client");
+					return DisconnectResult.Close;
+				}else if(op == 4002){
+					logger.fatal("[discor.d] OP 4002: Invalid payload was sent by client");
+					return DisconnectResult.Close;
+				}else if(op == 4003){
+					logger.fatal("[discor.d] OP 4003: A payload was sent before identifying");
+					return DisconnectResult.Close;
+				}else if(op == 4004){
+					logger.fatal("[discor.d] OP 4004: Authentication token is invalid");
+					return DisconnectResult.Close;
+				}else if(op == 4005){
+					logger.fatal("[discor.d] OP 4005: Multiple identify events were sent by client");
+					return DisconnectResult.Close;
+				}else if(op == 4007){
+					logger.critical("[discor.d] OP 4007: Invalid seq passed on resume");
+					return DisconnectResult.Reconnect;
+				}else if(op == 4008){
+					logger.fatal("[discor.d] OP 4008: Gateway rate limited");
+					return DisconnectResult.Close;
+				}else if(op == 4009){
+					logger.critical("[discor.d] OP 4009: Session timed out");
+					return DisconnectResult.Reconnect;
+				}else if(op == 4010){
+					logger.fatal("[discor.d] OP 4010: Invalid shard sent when identifying");
+					return DisconnectResult.Close;
+				}else if(op == 4011){
+					logger.fatal("[discor.d] OP 4011: Client requires sharding");
+					return DisconnectResult.Close;
 				}else logger.warning("[discor.d] Unhandled Gateway OP Code: ", op);
 			}
 		}
-		return DisconnectResult.Close;
+		return DisconnectResult.Reconnect;
+	}
+	/**
+	* Shuts down the bot gracefully 
+	*/
+	public void stop(){
+		shutDown = true;
 	}
 	/**
 	* Gets the current bot user's object
 	*/
-	public @property User getBotUser(){
+	public @property User getMe(){
 		return botUser;
 	}
 	private bool requestResponse(string url, HTTPMethod method, Json message = Json.emptyObject, RouteType route = RouteType.Global, ulong snowflake = 0, scope void delegate(scope HTTPClientResponse) callback = cast(void delegate(scope HTTPClientResponse res)) null){
@@ -408,7 +461,7 @@ class DiscordBot{
 			handleLimitedRequest(url, method, message, route, snowflake, callback);
 			return false;
 		}
-		if(res.statusCode != 200 && res.statusCode != 204){
+		if(res.statusCode != 200 && res.statusCode != 201 && res.statusCode != 204){
 			logger.warning("[discor.d] Error encountered when requesting response: ", res.statusCode, ", ", res.statusPhrase);
 			return false;
 		}
