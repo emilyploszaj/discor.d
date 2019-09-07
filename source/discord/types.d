@@ -877,12 +877,12 @@ struct Emoji{
 	///The rich name of the emoji in the format name:id, used by reaction endpoints
 	public @property string richName(){
 		if(!custom) return name;
-		else return name ~ ":" ~ userId.to!string;
+		else return name ~ ":" ~ id.to!string;
 	}
 	///The text code for an emoji, to be used in message content in the format <name:id>
 	public @property string textCode(){
 		if(!custom) return name;
-		else return "<" ~ name ~ ":" ~ userId.to!string ~ ">";
+		else return "<" ~ name ~ ":" ~ id.to!string ~ ">";
 	}
 	public const bool opEquals(Emoji e){
 		return name == e.name && id == e.id;

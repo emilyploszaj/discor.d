@@ -12,6 +12,7 @@ module discord.rest.channel;
 import discord.bot;
 import std.algorithm;
 import std.conv;
+import std.uri;
 import vibe.data.json;
 import vibe.http.client;
 
@@ -108,24 +109,34 @@ mixin template RestChannel(alias requestResponse){
 	*	message =	The text content of the message
 	*	embed =		The rich embed content of the message
 	* Returns:
-	*	`true` if successful, `false` otherwise
+	*	The `discord.types.Message` created or null if an error ocurred
 	* See_Also:
 	*	$(LINK https://discordapp.com/developers/docs/resources/channel#embed-object)
 	*/
-	public bool createMessage(Channel channel, string message){
+	public Nullable!Message createMessage(Channel channel, string message){
 		return createMessage(channel.id, message);
 	}
 	/// ditto
-	public bool createMessage(ulong channel, string message){
-		return requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message)]), RouteType.Channel, channel);
+	public Nullable!Message createMessage(ulong channel, string message){
+		Nullable!Message result;
+		requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message)]), RouteType.Channel, channel, (scope res){
+			if(res.statusCode != 200) return;
+			result = Message(res.readJson());
+		});
+		return result;
 	}
 	/// ditto
-	public bool createMessage(Channel channel, string message, Json embed){
+	public Nullable!Message createMessage(Channel channel, string message, Json embed){
 		return createMessage(channel.id, message, embed);
 	}
 	/// ditto
-	public bool createMessage(ulong channel, string message, Json embed){
-		return requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message), "embed": embed]), RouteType.Channel, channel);
+	public Nullable!Message createMessage(ulong channel, string message, Json embed){
+		Nullable!Message result;
+		requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message), "embed": embed]), RouteType.Channel, channel, (scope res){
+			if(res.statusCode != 200) return;
+			result = Message(res.readJson());
+		});
+		return result;
 	}
 
 	/**
@@ -163,7 +174,7 @@ mixin template RestChannel(alias requestResponse){
 	}
 	/// ditto
 	public bool createReaction(ulong channel, ulong message, string emoji){
-		return requestResponse("channels/" ~ to!string(channel) ~ "/messages/" ~ to!string(message) ~ "/reactions/" ~ emoji ~ "/@me", HTTPMethod.PUT, Json.emptyObject, RouteType.Channel, channel);
+		return requestResponse("channels/" ~ to!string(channel) ~ "/messages/" ~ to!string(message) ~ "/reactions/" ~ encode(emoji) ~ "/@me", HTTPMethod.PUT, Json.emptyObject, RouteType.Channel, channel);
 	}
 	/**
 	* Removes an emoji reaction from a message

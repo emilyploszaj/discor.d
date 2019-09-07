@@ -53,6 +53,11 @@ class DiscordEvents{
 	public void actionRateLimited(string url, HTTPMethod method, Json message){
 	}
 	/**
+	* Called when the bot is about to shut down, should be used to clean up if needed (this can be called from no thread if a SIGINT is intercepted, __gshared might be needed for accessed data)
+	*/
+	public void shutDown(){
+	}
+	/**
 	* Called when a channel is created
 	* Params:
 	*	channel =	The `discord.types.Channel` instance created

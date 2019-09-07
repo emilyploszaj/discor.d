@@ -19,6 +19,7 @@ public import discord.cache;
 public import discord.events;
 public import discord.types;
 
+import core.stdc.signal;
 import core.time;
 import core.thread;
 import discord.rest.channel;
@@ -55,6 +56,7 @@ enum RouteType{
 *
 *	`discord.rest.user.RestUser` for all REST methods relating to users
 */
+private static __gshared DiscordBot[] currentBots;
 class DiscordBot{
 	private enum DisconnectResult{
 		None, Reconnect, Resume, Close
@@ -92,7 +94,7 @@ class DiscordBot{
 	* Creates a Discord bot instance and prepares it to begin accepting events
 	* Params:
 	*	token =		The token of your Discord bot application
-	*	events =	The event handler for your discord bot, should be a custom class that overwrites `discord.bot.DiscordEvents`
+	*	events =	The event handler for your Discord bot, should be a custom class that overwrites `discord.bot.DiscordEvents`
 	*	logLevel =	The level of log detail you want to recieve, by default only critical or fatal events will be logged
 	*/
 	this(string token, DiscordEvents events, LogLevel logLevel = LogLevel.critical){
@@ -104,6 +106,8 @@ class DiscordBot{
 	* Starts the bot and begins the event loop, this is a blocking method
 	*/
 	public void start(){
+		signal(SIGINT, &sigInterupt);
+		currentBots ~= this;
 		shutDown = false;
 		HTTPClientResponse res = requestHTTP("https://discordapp.com/api/gateway/bot", (scope HTTPClientRequest req){
 			req.headers.addField("Authorization", "Bot " ~ token);
@@ -129,6 +133,7 @@ class DiscordBot{
 				break;
 			}
 		}
+		shutDown = true;
 	}
 	//TODO add ability to update user status (game status 5 times per minute limit)
 	public DisconnectResult runLoop(WebSocket ws, DisconnectResult dcResult){
@@ -352,6 +357,7 @@ class DiscordBot{
 						logger.critical("[discor.d] Unhandled exception in event dispatch:\n", e);
 					}
 					if(shutDown){
+						events.shutDown();
 						return DisconnectResult.Close;
 					}
 				}else if(op == 1){//Requested heartbeat
@@ -491,4 +497,15 @@ private string getSystemString(){
 	else version(Windows) return "windows";
 	else version(Posix) return "other/posix";
 	else return "other/unknown";
+}
+public void closeGracefully(){
+	foreach(DiscordBot bot; currentBots){
+		if(bot.shutDown) continue;
+		bot.events.shutDown();
+	}
+}
+extern(C) nothrow @nogc @system void sigInterupt(int signal){
+	import core.stdc.stdlib: exit;
+	(cast(void function() nothrow @nogc @system)(&closeGracefully))();
+	exit(0);
 }
