@@ -44,6 +44,11 @@ import vibe.http.client;
 *	---
 */
 mixin template RestChannel(alias requestResponse){
+	enum MessageSearchType{
+		Around = "around",
+		Before = "before",
+		After = "after"
+	}
 	/**
 	* Modifies a channel using local changes
 	* Params:
@@ -52,17 +57,16 @@ mixin template RestChannel(alias requestResponse){
 	*	`true` if successful, `false` otherwise
 	*/
 	public bool modifyChannel(Channel channel){
-		Json json = Json([
-			"name": Json(channel.name),
-			"position": Json(channel.position),
-			"topic": Json(channel.topic),
-			"nsfw": Json(channel.nsfw),
-			"rate_limit_per_user": Json(channel.rateLimitPerUser),
-			"bitrate": Json(channel.bitrate),
-			"user_limit": Json(channel.userLimit),
-			//TODO missing: "permission_overwrites"
-			"parent_id": Json(channel.parentId)
-		]);
+		Json json = Json.emptyObject;
+		if(!channel.name.isNull) json["name"] = channel.name.get();
+		if(!channel.position.isNull) json["position"] = channel.position.get();
+		if(!channel.topic.isNull) json["topic"] = channel.topic.get();
+		if(!channel.nsfw.isNull) json["nsfw"] = channel.nsfw.get();
+		if(!channel.rateLimitPerUser.isNull) json["rate_limit_per_user"] = channel.rateLimitPerUser.get();
+		if(!channel.bitrate.isNull) json["bitrate"] = channel.bitrate.get();
+		if(!channel.userLimit.isNull) json["user_limit"] = channel.userLimit.get();
+		//TODO missing: "permission_overwrites"
+		if(!channel.parentId.isNull) json["parent_id"] = channel.parentId.get();
 		return requestResponse("channels/" ~ to!string(channel.id), HTTPMethod.PATCH, json, RouteType.Channel, channel.id);
 	}
 	/**
@@ -80,8 +84,38 @@ mixin template RestChannel(alias requestResponse){
 		return requestResponse("channels/" ~ to!string(channel), HTTPMethod.DELETE, Json.emptyObject, RouteType.Channel, channel);
 	}
 
-	//TODO getChannelMessages
-
+	/**
+	* Returns a collection of messages relative to another message
+	* Params:
+	*	type =		The `discord.bot.MessageSearchType` to search with
+	*	channel =	The `discord.types.Channel` with the message
+	*	message =	The `discord.types.Message` to use to search
+	*	limit =		The most messages to return, between 1-100
+	* Returns:
+	*	An array of `discord.types.Message`s
+	*/
+	public Message[] getMessages(MessageSearchType type, Message message, uint limit = 50){
+		return getMessages(type, message.channelId, message.id, limit);
+	}
+	///ditto
+	public Message[] getMessages(MessageSearchType type, Channel channel, ulong message, uint limit = 50){
+		return getMessages(type, channel.id, message, limit);
+	}
+	///ditto
+	public Message[] getMessages(MessageSearchType type, ulong channel, ulong message, uint limit = 50){
+		if(limit < 1) limit = 1;
+		if(limit > 100) limit = 100;
+		string url = "channels/" ~ to!string(channel) ~ "/messages?" ~ type ~ "=" ~ to!string(message) ~ "&limit=" ~ to!string(limit);
+		Message[] messages;
+		requestResponse(url, HTTPMethod.GET, Json.emptyObject, RouteType.Channel, channel, (scope res){
+			if(res.statusCode != 200) return;
+			Json result = res.readJson();
+			foreach(Json json; result.byValue){
+				messages ~= Message(json);
+			}
+		});
+		return messages;
+	}
 	/**
 	* Returns a message from id
 	* Params:

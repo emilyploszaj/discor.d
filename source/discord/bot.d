@@ -40,9 +40,11 @@ import vibe.data.json;
 import vibe.http.client;
 import vibe.http.websockets;
 
+const string VERSION = "1.0";
 enum RouteType{
 	Global, Guild, Channel, Webhook
 }
+private __gshared DiscordBot[] currentBots;
 /**
 * Bot instance for interfacing with Discord's websocket and HTTP APIs
 * See_Also:
@@ -56,7 +58,6 @@ enum RouteType{
 *
 *	`discord.rest.user.RestUser` for all REST methods relating to users
 */
-private static __gshared DiscordBot[] currentBots;
 class DiscordBot{
 	private enum DisconnectResult{
 		None, Reconnect, Resume, Close
@@ -179,7 +180,7 @@ class DiscordBot{
 						}else if(data["t"].get!string == "CHANNEL_CREATE"){
 							Channel channel = Channel(data["d"]);
 							addCachedChannel(channel);
-							if(channel.guildId != 0) modifyCachedGuild(channel.guildId, (ref Guild g){
+							if(!channel.guildId.isNull) modifyCachedGuild(channel.guildId.get(), (ref Guild g){
 								g.channelIds ~= channel.id;
 							});
 							events.channelCreate(channel);
@@ -191,18 +192,18 @@ class DiscordBot{
 							events.channelUpdate(channel);
 						}else if(data["t"].get!string == "CHANNEL_DELETE"){
 							ulong id = data["t"]["id"].get!string.to!ulong;
-							Channel channel = getChannel(id);
+							Channel channel = getChannel(id).get();
 							removeCachedChannel(id);
 							if(channel.guildId != 0){
-								modifyCachedGuild(channel.guildId, (ref Guild g){
-									long i = g.channelIds.countUntil!(c => c == channel.id);
+								modifyCachedGuild(channel.guildId.get, (ref Guild g){
+									size_t i = g.channelIds.countUntil!(c => c == channel.id);
 									g.channelIds = g.channelIds.remove(i);
 								});
 							}
 							events.channelDelete(channel);
 						}else if(data["t"].get!string == "CHANNEL_PINS_UPDATE"){//Info not sent with channels so caching is not important
 							ulong id = data["d"]["channel_id"].get!string.to!ulong;
-							events.pinsUpdate(getChannel(id));
+							events.pinsUpdate(getChannel(id).get());
 						}else if(data["t"].get!string == "GUILD_CREATE"){
 							Guild guild = Guild(data["d"]);
 							foreach(Json j; data["d"]["channels"][]){
@@ -217,29 +218,29 @@ class DiscordBot{
 							modifyCachedGuild(id, (ref Guild g){
 								g.updateInfo(data["d"]);
 							});
-							events.guildUpdate(getGuild(id));
+							events.guildUpdate(getGuild(id).get());
 						}else if(data["t"].get!string == "GUILD_DELETE"){
 							ulong id = data["d"]["id"].get!string.to!ulong;
-							Guild guild = getGuild(id);
+							Guild guild = getGuild(id).get();
 							removeCachedGuild(id);//TODO maybe hold a list of unavailable guilds for a different handling
 							events.guildDelete(guild, data["d"]["unavailable"].type == Json.Type.undefined);
 						}else if(data["t"].get!string == "GUILD_BAN_ADD"){//Info not sent with guild so caching is not important
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
-							Guild guild = getGuild(id);
+							Guild guild = getGuild(id).get();
 							events.guildBanAdd(guild, User(data["d"]["user"]));//Sending partial info
 						}else if(data["t"].get!string == "GUILD_BAN_REMOVE"){//Info not sent with guild so caching is not important
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
-							Guild guild = getGuild(id);
+							Guild guild = getGuild(id).get();
 							events.guildBanRemove(guild, User(data["d"]["user"]));//Sending partial info
 						}else if(data["t"].get!string == "GUILD_EMOJIS_UPDATE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							modifyCachedGuild(id, (ref Guild g){
 								g.emojis = data["d"]["emojis"][].map!(e => Emoji(e)).array;
 							});
-							events.guildEmojisUpdate(getGuild(id));
+							events.guildEmojisUpdate(getGuild(id).get());
 						}else if(data["t"].get!string == "GUILD_INTEGRATIONS_UPDATE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
-							events.guildIntegrationsUpdate(getGuild(id));
+							events.guildIntegrationsUpdate(getGuild(id).get());
 						}else if(data["t"].get!string == "GUILD_MEMBER_ADD"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							GuildMember member = GuildMember(data["d"]);
@@ -247,29 +248,29 @@ class DiscordBot{
 								g.members ~= member;
 							});
 							addCachedUser(User(data["d"]["user"]));
-							events.guildMemberAdd(getGuild(id), member);
+							events.guildMemberAdd(getGuild(id).get(), member);
 						}else if(data["t"].get!string == "GUILD_MEMBER_REMOVE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							User user = User(data["d"]["user"]);
 							GuildMember member;
 							modifyCachedGuild(id, (ref Guild g){
-								long i = g.members.countUntil!(m => m.user.id == user.id);
+								size_t i = g.members.countUntil!(m => m.user.id == user.id);
 								member = g.members[i];
 								g.members = g.members.remove(i);
 							});
-							events.guildMemberRemove(getGuild(id), member);
+							events.guildMemberRemove(getGuild(id).get(), member);
 						}else if(data["t"].get!string == "GUILD_MEMBER_UPDATE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							ulong userId = data["d"]["user"]["id"].get!string.to!ulong;
 							GuildMember member;
 							modifyCachedGuild(id, (ref Guild g){
-								long i = g.members.countUntil!(m => m.userId == userId);
+								size_t i = g.members.countUntil!(m => m.userId == userId);
 								g.members[i].nick = data["d"]["nick"].get!string;
 								g.members[i].roleIds = data["d"]["roles"][].map!(r => r.get!string.to!ulong).array;
 								member = g.members[i];
 							});
 							addCachedUser(User(data["d"]["user"]));//Should be a full user object
-							events.guildMemberUpdate(getGuild(id), member);
+							events.guildMemberUpdate(getGuild(id).get, member);
 						//NOTE GUILD_MEMBERS_CHUNK (Response to a request, not needed for now)
 						}else if(data["t"].get!string == "GUILD_ROLE_CREATE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
@@ -277,25 +278,25 @@ class DiscordBot{
 							modifyCachedGuild(id, (ref Guild g){
 								g.roles ~= role;
 							});
-							events.guildRoleCreate(getGuild(id), role);
+							events.guildRoleCreate(getGuild(id).get(), role);
 						}else if(data["t"].get!string == "GUILD_ROLE_UPDATE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							Role role = Role(data["d"]["role"]);
 							modifyCachedGuild(id, (ref Guild g){
-								long i = g.roles.countUntil!(r => r.id == role.id);
+								size_t i = g.roles.countUntil!(r => r.id == role.id);
 								g.roles[i] = role;
 							});
-							events.guildRoleUpdate(getGuild(id), role);
+							events.guildRoleUpdate(getGuild(id).get(), role);
 						}else if(data["t"].get!string == "GUILD_ROLE_DELETE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							ulong roleId = data["d"]["role_id"].get!string.to!ulong;
 							Role role;
 							modifyCachedGuild(id, (ref Guild g){
-								long i = g.roles.countUntil!(r => r.id == role.id);
+								size_t i = g.roles.countUntil!(r => r.id == role.id);
 								role = g.roles[i];
 								g.roles = g.roles.remove(i);
 							});
-							events.guildRoleDelete(getGuild(id), role);
+							events.guildRoleDelete(getGuild(id).get(), role);
 						}else if(data["t"].get!string == "MESSAGE_CREATE"){
 							Message message = Message(data["d"]);
 							modifyCachedChannel(message.channelId, (ref Channel c){
@@ -308,27 +309,27 @@ class DiscordBot{
 						}else if(data["t"].get!string == "MESSAGE_DELETE"){//Might result in removing the last message
 							ulong id = data["d"]["id"].get!string.to!ulong;
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
-							events.messageDelete(getChannel(channelId), id);
+							events.messageDelete(getChannel(channelId).get(), id);
 						}else if(data["t"].get!string == "MESSAGE_DELETE_BULK"){//Might result in removing the last message
 							ulong[] ids = data["d"]["ids"][].map!(m => m.get!string.to!ulong).array;
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
-							events.messageDeleteBulk(getChannel(channelId), ids);
+							events.messageDeleteBulk(getChannel(channelId).get(), ids);
 						}else if(data["t"].get!string == "MESSAGE_REACTION_ADD"){//TODO use cache
 							Emoji emoji = Emoji(data["d"]["emoji"]);
 							ulong userId = data["d"]["user_id"].get!string.to!ulong;
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
 							ulong messageId = data["d"]["message_id"].get!string.to!ulong;
-							events.messageReactionAdd(getChannel(channelId), messageId, userId, emoji);
+							events.messageReactionAdd(getChannel(channelId).get(), messageId, userId, emoji);
 						}else if(data["t"].get!string == "MESSAGE_REACTION_REMOVE"){//TODO use cache
 							Emoji emoji = Emoji(data["d"]["emoji"]);
 							ulong userId = data["d"]["user_id"].get!string.to!ulong;
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
 							ulong messageId = data["d"]["message_id"].get!string.to!ulong;
-							events.messageReactionRemove(getChannel(channelId), messageId, userId, emoji);
+							events.messageReactionRemove(getChannel(channelId).get(), messageId, userId, emoji);
 						}else if(data["t"].get!string == "MESSAGE_REACTION_REMOVE_ALL"){
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
 							ulong messageId = data["d"]["message_id"].get!string.to!ulong;
-							events.messageReactionRemoveAll(getChannel(channelId), messageId);
+							events.messageReactionRemoveAll(getChannel(channelId).get(), messageId);
 						}else if(data["t"].get!string == "PRESENCE_UPDATE"){
 							ulong guildId = data["d"]["guild_id"].get!string.to!ulong;
 							ulong userId = data["d"]["user"]["id"].get!string.to!ulong;
@@ -342,11 +343,11 @@ class DiscordBot{
 								}
 								g.presences[userId] = activity;
 							});
-							events.presenceUpdate(getGuild(guildId), userId, roles, activity, status);
+							events.presenceUpdate(getGuild(guildId).get(), userId, roles, activity, status);
 						}else if(data["t"].get!string == "TYPING_START"){
 							ulong userId = data["d"]["user_id"].get!string.to!ulong;
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
-							events.typingStart(getChannel(channelId), userId);
+							events.typingStart(getChannel(channelId).get(), userId);
 						}else if(data["t"].get!string == "USER_UPDATE"){
 							botUser = User(data["d"]);
 						//NOTE VOICE_STATE_UPDATE all voice events unhandled
@@ -450,11 +451,11 @@ class DiscordBot{
 		}
 		HTTPClientResponse res = requestHTTP("https://discordapp.com/api/" ~ url, (scope HTTPClientRequest req){
 			req.headers.addField("Authorization", "Bot " ~ token);
+			req.headers.addField("User-Agent", cast(string) ("DiscordBot (https://github.com/emilyploszaj/discor.d, " ~ VERSION ~ ")"));
 			req.headers.addField("Content-Type", "application/json");
 			req.method = method;
-			req.writeJsonBody(message);
+			if(message != Json.emptyObject) req.writeJsonBody(message);
 		});
-		scope(exit) res.dropBody();
 		//Rate limit information is not always passed, will always be passed if limits are exceeded though
 		if("X-RateLimit-Limit" in res.headers && "X-RateLimit-Remaining" in res.headers && "X-RateLimit-Reset" in res.headers){
 			rateLimits[rlp] = RateLimitInformation(
@@ -463,12 +464,15 @@ class DiscordBot{
 				res.headers["X-RateLimit-Reset"].to!int
 			);
 		}
+		scope(exit) res.dropBody();
 		if(res.statusCode == 429){
 			handleLimitedRequest(url, method, message, route, snowflake, callback);
 			return false;
 		}
 		if(res.statusCode != 200 && res.statusCode != 201 && res.statusCode != 204){
-			logger.warning("[discor.d] Error encountered when requesting response: ", res.statusCode, ", ", res.statusPhrase);
+			logger.warning("[discor.d] Error encountered when requesting response: ", res.statusCode, ", ", res.statusPhrase, "\n\turl: ", "https://discordapp.com/api/" , url);
+			import vibe.stream.operations: readAll;
+			logger.warning("[dscord.d] Response: ", cast(string) res.bodyReader.readAll());
 			return false;
 		}
 		if(callback !is null) callback(res);

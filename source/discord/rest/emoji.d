@@ -103,7 +103,8 @@ mixin template RestEmoji(alias requestResponse){
 	*	`true` if successful, `false` otherwise
 	*/
 	public bool modifyEmoji(Guild guild, Emoji emoji, string name){
-		return modifyEmoji(guild.id, emoji.id, name);
+		if(emoji.id.isNull) return false;
+		return modifyEmoji(guild.id, emoji.id.get(), name);
 	}
 	/// ditto
 	public bool modifyEmoji(Guild guild, ulong emoji, string name){
@@ -111,7 +112,8 @@ mixin template RestEmoji(alias requestResponse){
 	}
 	/// ditto
 	public bool modifyEmoji(ulong guild, Emoji emoji, string name){
-		return modifyEmoji(guild, emoji.id, name);
+		if(emoji.id.isNull) return false;
+		return modifyEmoji(guild, emoji.id.get(), name);
 	}
 	/// ditto
 	public bool modifyEmoji(ulong guild, ulong emoji, string name){
@@ -119,11 +121,13 @@ mixin template RestEmoji(alias requestResponse){
 	}
 	/// ditto
 	public bool modifyEmoji(Guild guild, Emoji emoji, string name, Role[] roles){
-		return modifyEmoji(guild.id, emoji.id, name, roles.map!(r => r.id).array);
+		if(emoji.id.isNull) return false;
+		return modifyEmoji(guild.id, emoji.id.get(), name, roles.map!(r => r.id).array);
 	}
 	/// ditto
 	public bool modifyEmoji(Guild guild, Emoji emoji, string name, ulong[] roles){
-		return modifyEmoji(guild.id, emoji.id, name, roles);
+		if(emoji.id.isNull) return false;
+		return modifyEmoji(guild.id, emoji.id.get(), name, roles);
 	}
 	/// ditto
 	public bool modifyEmoji(Guild guild, ulong emoji, string name, Role[] roles){
@@ -135,11 +139,13 @@ mixin template RestEmoji(alias requestResponse){
 	}
 	/// ditto
 	public bool modifyEmoji(ulong guild, Emoji emoji, string name, Role[] roles){
-		return modifyEmoji(guild, emoji.id, name, roles.map!(r => r.id).array);//Okay this is absurd who will ever use this mix of variables
+		if(emoji.id.isNull) return false;
+		return modifyEmoji(guild, emoji.id.get(), name, roles.map!(r => r.id).array);//Okay this is absurd who will ever use this mix of variables
 	}
 	/// ditto
 	public bool modifyEmoji(ulong guild, Emoji emoji, string name, ulong[] roles){
-		return modifyEmoji(guild, emoji.id, name, roles);
+		if(emoji.id.isNull) return false;
+		return modifyEmoji(guild, emoji.id.get(), name, roles);
 	}
 	/// ditto
 	public bool modifyEmoji(ulong guild, ulong emoji, string name, Role[] roles){
