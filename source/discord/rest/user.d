@@ -53,7 +53,7 @@ mixin template RestUser(alias requestResponse){
 	public User getCurrentUser(){
 		User user;
 		requestResponse("users/@me", HTTPMethod.GET, Json.emptyObject, RouteType.Global, 0, (scope res){
-			user = User(res.readJson());
+			user = res.readJson().parseJsonToStruct!User;
 		});
 		return user;
 	}
@@ -68,7 +68,7 @@ mixin template RestUser(alias requestResponse){
 		User result;
 		requestResponse("users/" ~ user.to!string, HTTPMethod.GET, Json.emptyObject, RouteType.Global, 0, (scope res){
 			if(res.statusCode != 200) return;
-			result = User(res.readJson());
+			result = res.readJson().parseJsonToStruct!User;
 		});
 		return result;
 	}

@@ -354,7 +354,7 @@ mixin template RestGuild(alias requestResponse){
 		Ban[] bans;
 		requestResponse("guilds/" ~ to!string(guild) ~ "/bans", HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
-			bans = res.readJson().byValue().map!(b => Ban(b)).array;
+			bans = res.readJson().byValue().map!(b => b.parseJsonToStruct!Ban).array;
 		});
 		return bans;
 	}
@@ -382,7 +382,7 @@ mixin template RestGuild(alias requestResponse){
 		Ban ban;
 		requestResponse("guilds/" ~ to!string(guild) ~ "/bans/" ~ to!string(user), HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
-			ban = Ban(res.readJson());
+			ban = res.readJson().parseJsonToStruct!Ban;
 		});
 		return ban;
 	}

@@ -10,9 +10,12 @@ import discord.cache;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.traits;
 import std.typecons;
 import vibe.data.json;
 
+enum Optional;
+enum Ignored;
 /**
 * A channel (text, voice, category, etc.)
 * Examples:
@@ -91,7 +94,7 @@ struct Channel{
 		position.safeAssign(json, "position");
 		rateLimitPerUser.safeAssign(json, "rate_limit_per_user");
 		userLimit.safeAssign(json, "user_limit");
-		if(json["recipients"].type == Json.Type.array) recipients = json["recipients"][].map!(u => User(u)).array;
+		if(json["recipients"].type == Json.Type.array) recipients = json["recipients"][].map!(u => u.parseJsonToStruct!User).array;
 	}
 	///Whether this channel is in a `discord.types.Guild`
 	public @property bool hasGuild(){
@@ -202,7 +205,7 @@ struct Guild{//TODO there seems to be a lot of missing values in here
 			foreach(Json j; json["presences"]){
 				if(j["game"].type == Json.Type.null_) continue;
 				ulong userId = j["user"]["id"].get!string.to!ulong;
-				presences[userId] = Activity(j["game"]);
+				presences[userId] = parseJsonToStruct!Activity(j["game"]);
 			}
 		}
 		members = json["members"][].map!(m => GuildMember(m)).array;
@@ -262,13 +265,9 @@ struct Guild{//TODO there seems to be a lot of missing values in here
 ///A ban in a guild
 struct Ban{
 	///The reason for the ban (or an empty string if none provided)
-	public Nullable!string reason;
+	public @Optional string reason;
 	///A user instance with minimal fields
 	public User user;
-	this(Json json){
-		reason.safeAssign(json, "reason");
-		user = User(json["user"]);
-	}
 }
 /**
 * A role in a guild
@@ -725,35 +724,32 @@ struct User{
 	///The four digit discriminator of the user
 	public string discriminator;
 	///The email of the user (unavailable without email scope)
-	public Nullable!string email;
+	public @Optional string email;
 	///The chosen language option of the user
-	public Nullable!string locale;
+	public @Optional string locale;
 	///The username of the user
 	public string username;
 	///The id of the user
-	public ulong id;
+	public @Ignored ulong _id;
 	///Whether the user is a bot
-	public Nullable!bool bot;
+	public @Optional bool bot;
 	///Whether the user has multifactor authentication enabled
-	public Nullable!bool mfaEnabled;
+	public @Optional bool mfaEnabled;
 	///Whether the user is verified
 	public bool verified;
 	///The flags on the account of the user
-	public Nullable!int flags;
+	public @Optional int flags;
 	///The type of premium the user has
-	public Nullable!int premiumType;
-	this(Json json){
-		discriminator = json["discriminator"].get!string;
-		email.safeAssign(json, "email");
-		locale.safeAssign(json, "locale");
-		username = json["username"].get!string;
-		id = json["id"].get!string.to!ulong;
-		bot.safeAssign(json, "bot");
-		mfaEnabled.safeAssign(json, "mfa_enabled");
-		verified.safeAssign(json, "verified");
-		flags.safeAssign(json, "flags");
-		premiumType.safeAssign(json, "premium_type");
+	public @Optional int premiumType;
+
+	public @property void id(string s) {
+		this._id = s.to!ulong;
 	}
+
+	public @property ulong id() {
+		return _id;
+	}
+
 	///Whether the user is a Discord employee
 	public @property bool employee(){
 		return (flags | (1 << 0)) != 0;
@@ -810,6 +806,7 @@ struct User{
 struct Activity{//TODO missing rich game info
 	///The different types of activities
 	public enum Type{
+		Invalid = -1,	///Initial state
 		Game = 0,		///For when a user is playing a game
 		Streaming = 1,	///For when a user is streaming on Twitch
 		Listening = 2,	///For when a user is listening to music on Spotify
@@ -817,14 +814,9 @@ struct Activity{//TODO missing rich game info
 	///The name of the activity
 	public string name;
 	///The url of the activity if this activity is a stream (only twitch.tv urls)
-	public Nullable!string url;
+	public @Optional string url;
 	///The type of the activity
-	public Nullable!Type type;
-	this(Json json){
-		name = json["name"].get!string;
-		type = cast(Type) json["type"].get!int;
-		if(type == 1) url.safeAssign(json, "url");
-	}
+	public @Optional Type type;
 }
 /**
 * An emoji in a guild
@@ -866,6 +858,10 @@ struct Emoji{
 		requireColons.safeAssign(json, "require_colons");
 		if(json["roles"].type != Json.Type.undefined) roleIds = json["roles"][].map!(r => r.get!string.to!ulong).array;
 	}
+	this(string name, ulong id) {
+		this.name = name;
+		this.id = id;
+	}
 	///Initiallize as unicode emoji
 	this(string name){
 		this.name = name;
@@ -882,7 +878,7 @@ struct Emoji{
 	///The text code for an emoji, to be used in message content in the format <name:id>
 	public @property string textCode(){
 		if(!custom) return name;
-		else return "<" ~ name ~ ":" ~ id.to!string ~ ">";
+		else return "<:" ~ name ~ ":" ~ id.to!string ~ ">";
 	}
 	public const bool opEquals(Emoji e){
 		return name == e.name && id == e.id;
@@ -907,4 +903,39 @@ private void safeAssign(T)(ref T var, Json json, string name){
 			if(json[name].type != Json.Type.null_ && json[name].type != Json.Type.undefined) var = json[name].get!T;
 		}
 	}
+}
+
+T parseJsonToStruct(T)(Json json) {
+	static assert(is(T == struct), "T must be a struct");
+	alias TYPES = Fields!T;
+	T val;
+	foreach (enum int i, enum string name; FieldNameTuple!T) {
+		mixin("enum bool ignored = hasUDA!(val." ~ name ~ ", Ignored);");
+		static if (!ignored) {
+			mixin("enum bool required = !hasUDA!(val." ~ name ~ ", Optional);");
+			Json j = json[name];
+			try {
+				static if (is(TYPES[i] == struct)) {
+					mixin("val." ~ name ~ " = parseJsonToStruct!(TYPES[i])(j);");
+				} else static if (!is(TYPES[i] == string) && isArray!(TYPES[i])) {
+					foreach (Json element; j) {
+						static if (is(ElementType!(TYPES[i]) == struct)) {
+							mixin("val." ~ name ~ " ~= parseJsonToStruct!(ElementType!(TYPES[i]))(element);");
+						} else {
+							mixin("val." ~ name ~ " ~= element.get!(ElementType!(TYPES[i]));");
+						}
+					}
+				} else {
+					mixin("val." ~ name ~ " = j.get!(TYPES[i]);");
+				}
+			} catch (Exception e) {
+				if (required) {
+					import std.stdio: writeln;
+					writeln(e);
+					throw new Exception("Required value missing or incorrectly typed: " ~ (T).stringof ~ "." ~ name);
+				}
+			}
+		}
+	}
+	return val;
 }

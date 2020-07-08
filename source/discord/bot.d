@@ -172,7 +172,7 @@ class DiscordBot{
 					logger.info("[discor.d] Event dispatched from gateway: ", data["t"].get!string);
 					try{
 						if(data["t"].get!string == "READY"){
-							botUser = User(data["d"]["user"]);
+							botUser = data["d"]["user"].parseJsonToStruct!User;
 							addCachedUser(botUser);
 							//Turns out private_channels doesn't do or contain anything?
 							sessionId = data["d"]["session_id"].get!string;
@@ -227,11 +227,11 @@ class DiscordBot{
 						}else if(data["t"].get!string == "GUILD_BAN_ADD"){//Info not sent with guild so caching is not important
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							Guild guild = getGuild(id).get();
-							events.guildBanAdd(guild, User(data["d"]["user"]));//Sending partial info
+							events.guildBanAdd(guild, data["d"]["user"].parseJsonToStruct!User);//Sending partial info
 						}else if(data["t"].get!string == "GUILD_BAN_REMOVE"){//Info not sent with guild so caching is not important
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							Guild guild = getGuild(id).get();
-							events.guildBanRemove(guild, User(data["d"]["user"]));//Sending partial info
+							events.guildBanRemove(guild, data["d"]["user"].parseJsonToStruct!User);//Sending partial info
 						}else if(data["t"].get!string == "GUILD_EMOJIS_UPDATE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
 							modifyCachedGuild(id, (ref Guild g){
@@ -247,11 +247,11 @@ class DiscordBot{
 							modifyCachedGuild(id, (ref Guild g){
 								g.members ~= member;
 							});
-							addCachedUser(User(data["d"]["user"]));
+							addCachedUser(data["d"]["user"].parseJsonToStruct!User);
 							events.guildMemberAdd(getGuild(id).get(), member);
 						}else if(data["t"].get!string == "GUILD_MEMBER_REMOVE"){
 							ulong id = data["d"]["guild_id"].get!string.to!ulong;
-							User user = User(data["d"]["user"]);
+							User user = data["d"]["user"].parseJsonToStruct!User;
 							GuildMember member;
 							modifyCachedGuild(id, (ref Guild g){
 								size_t i = g.members.countUntil!(m => m.user.id == user.id);
@@ -269,7 +269,7 @@ class DiscordBot{
 								g.members[i].roleIds = data["d"]["roles"][].map!(r => r.get!string.to!ulong).array;
 								member = g.members[i];
 							});
-							addCachedUser(User(data["d"]["user"]));//Should be a full user object
+							addCachedUser(data["d"]["user"].parseJsonToStruct!User);//Should be a full user object
 							events.guildMemberUpdate(getGuild(id).get, member);
 						//NOTE GUILD_MEMBERS_CHUNK (Response to a request, not needed for now)
 						}else if(data["t"].get!string == "GUILD_ROLE_CREATE"){
@@ -336,7 +336,7 @@ class DiscordBot{
 							Role[] roles;
 							Activity activity;
 							string status = data["d"]["status"].get!string;
-							if(data["d"]["game"].type == Json.Type.object) activity = Activity(data["d"]["game"]);
+							if(data["d"]["game"].type == Json.Type.object) activity = data["d"]["game"].parseJsonToStruct!Activity;
 							modifyCachedGuild(guildId, (ref Guild g){
 								if(data["d"]["roles"].type == Json.Type.array){
 									roles = data["d"]["roles"][].map!(r => g.roles.find!(gr => gr.id == r.get!string.to!ulong)[0]).array;
@@ -349,7 +349,7 @@ class DiscordBot{
 							ulong channelId = data["d"]["channel_id"].get!string.to!ulong;
 							events.typingStart(getChannel(channelId).get(), userId);
 						}else if(data["t"].get!string == "USER_UPDATE"){
-							botUser = User(data["d"]);
+							botUser = data["d"].parseJsonToStruct!User;
 						//NOTE VOICE_STATE_UPDATE all voice events unhandled
 						//NOTE VOICE_SERVER_UPDATE all voice events unhandled
 						//TODO WEBHOOKS_UPDATE
@@ -454,7 +454,7 @@ class DiscordBot{
 			req.headers.addField("User-Agent", cast(string) ("DiscordBot (https://github.com/emilyploszaj/discor.d, " ~ VERSION ~ ")"));
 			req.headers.addField("Content-Type", "application/json");
 			req.method = method;
-			if(message != Json.emptyObject) req.writeJsonBody(message);
+			if(method != HTTPMethod.GET || message != Json.emptyObject) req.writeJsonBody(message);
 		});
 		//Rate limit information is not always passed, will always be passed if limits are exceeded though
 		if("X-RateLimit-Limit" in res.headers && "X-RateLimit-Remaining" in res.headers && "X-RateLimit-Reset" in res.headers){
