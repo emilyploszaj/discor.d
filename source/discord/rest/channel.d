@@ -111,7 +111,7 @@ mixin template RestChannel(alias requestResponse){
 			if(res.statusCode != 200) return;
 			Json result = res.readJson();
 			foreach(Json json; result.byValue){
-				messages ~= Message(json);
+				messages ~= parseTypeFromJson!Message(json);
 			}
 		});
 		return messages;
@@ -132,7 +132,7 @@ mixin template RestChannel(alias requestResponse){
 		Message result;
 		requestResponse("channels/" ~ to!string(channel) ~ "/messages/" ~ to!string(message), HTTPMethod.GET, Json.emptyObject, RouteType.Channel, channel, (scope res){
 			if(res.statusCode != 200) return;
-			result = Message(res.readJson());
+			result = parseTypeFromJson!Message(res.readJson());
 		});
 		return result;
 	}
@@ -155,7 +155,7 @@ mixin template RestChannel(alias requestResponse){
 		Nullable!Message result;
 		requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message)]), RouteType.Channel, channel, (scope res){
 			if(res.statusCode != 200) return;
-			result = Message(res.readJson());
+			result = parseTypeFromJson!Message(res.readJson());
 		});
 		return result;
 	}
@@ -168,7 +168,7 @@ mixin template RestChannel(alias requestResponse){
 		Nullable!Message result;
 		requestResponse("channels/" ~ to!string(channel) ~ "/messages", HTTPMethod.POST, Json(["content": Json(message), "embed": embed]), RouteType.Channel, channel, (scope res){
 			if(res.statusCode != 200) return;
-			result = Message(res.readJson());
+			result = parseTypeFromJson!Message(res.readJson());
 		});
 		return result;
 	}
@@ -433,7 +433,7 @@ mixin template RestChannel(alias requestResponse){
 		Message[] messages;
 		requestResponse("channels/" ~ to!string(channel) ~ "/pins", HTTPMethod.GET, Json.emptyObject, RouteType.Channel, channel, (scope res){
 			if(res.statusCode != 200) return;
-			messages = res.readJson().byValue().map!(m => Message(m)).array;
+			messages = res.readJson().byValue().map!(m => parseTypeFromJson!Message(m)).array;
 		});
 		return messages;
 	}

@@ -143,7 +143,7 @@ mixin template RestGuild(alias requestResponse){
 		GuildMember result;
 		requestResponse("guilds/" ~ to!string(guild) ~ "/members/" ~ to!string(member), HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
-			result = GuildMember(res.readJson());
+			result = parseTypeFromJson!GuildMember(res.readJson());
 		});
 		return result;
 	}
@@ -354,7 +354,7 @@ mixin template RestGuild(alias requestResponse){
 		Ban[] bans;
 		requestResponse("guilds/" ~ to!string(guild) ~ "/bans", HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
-			bans = res.readJson().byValue().map!(b => b.parseJsonToStruct!Ban).array;
+			bans = res.readJson().byValue().map!(b => b.parseTypeFromJson!Ban).array;
 		});
 		return bans;
 	}
@@ -382,7 +382,7 @@ mixin template RestGuild(alias requestResponse){
 		Ban ban;
 		requestResponse("guilds/" ~ to!string(guild) ~ "/bans/" ~ to!string(user), HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
-			ban = res.readJson().parseJsonToStruct!Ban;
+			ban = res.readJson().parseTypeFromJson!Ban;
 		});
 		return ban;
 	}
@@ -455,7 +455,7 @@ mixin template RestGuild(alias requestResponse){
 		Role[] roles;
 		requestResponse("guilds/" ~ to!string(guild) ~ "/roles", HTTPMethod.GET, Json.emptyObject, RouteType.Guild, guild, (scope res){
 			if(res.statusCode != 200) return;
-			roles = res.readJson().byValue().map!(r => Role(r)).array;
+			roles = res.readJson().byValue().map!(r => parseTypeFromJson!Role(r)).array;
 		});
 		return roles;
 	}

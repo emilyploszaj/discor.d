@@ -10,12 +10,20 @@ import discord.cache;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.range;
 import std.traits;
 import std.typecons;
 import vibe.data.json;
 
+// Json parsing UDAs
 enum Optional;
+// Json parsing UDAs
 enum Ignored;
+// Json parsing UDAs
+struct Named {
+	string name;
+}
+
 /**
 * A channel (text, voice, category, etc.)
 * Examples:
@@ -94,7 +102,7 @@ struct Channel{
 		position.safeAssign(json, "position");
 		rateLimitPerUser.safeAssign(json, "rate_limit_per_user");
 		userLimit.safeAssign(json, "user_limit");
-		if(json["recipients"].type == Json.Type.array) recipients = json["recipients"][].map!(u => u.parseJsonToStruct!User).array;
+		if(json["recipients"].type == Json.Type.array) recipients = json["recipients"][].map!(u => u.parseTypeFromJson!User).array;
 	}
 	///Whether this channel is in a `discord.types.Guild`
 	public @property bool hasGuild(){
@@ -205,10 +213,10 @@ struct Guild{//TODO there seems to be a lot of missing values in here
 			foreach(Json j; json["presences"]){
 				if(j["game"].type == Json.Type.null_) continue;
 				ulong userId = j["user"]["id"].get!string.to!ulong;
-				presences[userId] = parseJsonToStruct!Activity(j["game"]);
+				presences[userId] = parseTypeFromJson!Activity(j["game"]);
 			}
 		}
-		members = json["members"][].map!(m => GuildMember(m)).array;
+		members = json["members"][].map!(m => parseTypeFromJson!GuildMember(m)).array;
 	}
 	public void updateInfo(Json json){
 		icon.safeAssign(json, "icon");
@@ -234,8 +242,8 @@ struct Guild{//TODO there seems to be a lot of missing values in here
 		if(json["explicit_content_filter"].type == Json.Type.int_){
 			explicitContentFilter = cast(ExplicitContentFilterLevel) json["explicit_content_filter"].get!int;
 		}
-		emojis = json["emojis"][].map!(e => Emoji(e)).array;
-		roles = json["roles"][].map!(r => Role(r)).array;
+		emojis = json["emojis"][].map!(e => parseTypeFromJson!(Emoji)(e)).array;
+		roles = json["roles"][].map!(r => parseTypeFromJson!Role(r)).array;
 	}
 	///A list of all `discord.types.Channel`s in the guild
 	public @property Channel[] channels(){
@@ -263,7 +271,7 @@ struct Guild{//TODO there seems to be a lot of missing values in here
 	}
 }
 ///A ban in a guild
-struct Ban{
+struct Ban {
 	///The reason for the ban (or an empty string if none provided)
 	public @Optional string reason;
 	///A user instance with minimal fields
@@ -308,7 +316,7 @@ struct Role{
 	public int position;
 	///The permissions of the role
 	public Permissions permissions;
-	this(Json json){
+	/*this(Json json){
 		name = json["name"].get!string;
 		id = json["id"].get!string.to!ulong;
 		hoist = json["hoist"].get!bool;
@@ -317,10 +325,10 @@ struct Role{
 		color = json["color"].get!int;
 		position = json["position"].get!int;
 		permissions = Permissions(json["permissions"].get!ulong);
-	}
+	}*/
 }
 ///A permissions structure (wrapper around a bitflag)
-struct Permissions{//TODO maybe properly document this? It seems self-explanatory
+struct Permissions {//TODO maybe properly document this? It seems self-explanatory
 	ulong permissions;
 	this(ulong permissions){
 		this.permissions = permissions;
@@ -602,9 +610,9 @@ struct Permissions{//TODO maybe properly document this? It seems self-explanator
 *	}
 * ---
 */
-struct Message{
+struct Message {
 	///The different types of messages (normal messages and special messages discord generates)
-	public enum Type{
+	public enum Type {
 		Default = 0,						///A text message by a user
 		RecipientAdd,						///A notification when a user is added to a group dm
 		RecipientRemove,					///A notification when a user leaves or is removed from a group dm
@@ -619,22 +627,22 @@ struct Message{
 		UserPremiumGuildSubscriptionTier3,	///A notification when a user nitro boosts a guild to tier 3
 	}
 	///The text content of the string
-	public string content;
+	public @Optional string content;
 	///The id of the `discord.types.User` who sent the message
-	public ulong authorId;
+	public @Ignored ulong authorId;
 	///The id of the `discord.types.Channel` that the message is in
-	public ulong channelId;
+	public @Named("channel_id") ulong channelId;
 	///The id of the message
 	public ulong id;
 	///Whether the message mentions @everyone
-	public bool mentionsEveryone;
+	public @Optional @Named("mentions_everyone") bool mentionsEveryone;
 	///Whether the message is pinned
-	public bool pinned;
+	public @Optional bool pinned;
 	///Whether the message is text to speech
-	public bool tts;
+	public @Optional bool tts;
 	///The type of the message
 	public Type type;
-	this(Json json){
+	/*this(Json json){
 		content.safeAssign(json, "content");
 		mentionsEveryone.safeAssign(json, "mention_everyone");
 		pinned.safeAssign(json, "pinned");
@@ -643,13 +651,16 @@ struct Message{
 		id = json["id"].get!string.to!ulong;
 		if(json["type"].type == Json.Type.int_) type = cast(Type) json["type"].get!int;
 		if(json["author"].type == Json.Type.object) authorId = json["author"]["id"].get!string.to!ulong;
+	}*/
+	private @property void author(User u) {
+		authorId = u.id;
 	}
 	///The channel this message is in
-	public @property Channel channel(){
+	public @property Channel channel() {
 		return getChannel(channelId);
 	}
 	///The `discord.types.User` who sent the message
-	public @property User author(){
+	public @property User author() {
 		return getUser(authorId);
 	}
 }
@@ -676,32 +687,35 @@ struct Message{
 */
 struct GuildMember{
 	///The member's guild-specific nickname
-	public Nullable!string nick;
+	public @Optional string nick;
 	///The timestamp when the member joined at
-	public string joinedAt;
+	public @Named("joined_at") string joinedAt;
 	///List of role ids the member has
-	public ulong[] roleIds;
+	public @Named("roles") ulong[] roleIds;
 	///Whether the member is deafened
 	public bool deaf;
 	///Whether the member is muted
 	public bool mute;
 	///The id of the member's `discord.types.User`
-	public ulong userId;
-	this(Json json){
+	public @Ignored ulong userId;
+	/*this(Json json){
 		nick.safeAssign(json, "nick");
 		joinedAt.safeAssign(json, "joined_at");
 		deaf = json["deaf"].get!bool;
 		mute = json["mute"].get!bool;
 		roleIds = json["roles"][].map!(r => r.get!string.to!ulong).array;
 		userId = json["user"]["id"].get!string.to!ulong;
+	}*/
+	private @property void user(User u) {
+		userId = u.id;
 	}
 	///The member's `discord.types.User` instance
 	public @property User user(){
-		return getUser(userId);
+		return getUser(userId).get();
 	}
 	///The member's display name, either their username or nickname if present
 	public @property string displayName(){
-		if(!nick.isNull) return nick;
+		if(nick.length > 0) return nick;
 		return user.username;
 	}
 }
@@ -730,25 +744,17 @@ struct User{
 	///The username of the user
 	public string username;
 	///The id of the user
-	public @Ignored ulong _id;
+	public ulong id;
 	///Whether the user is a bot
 	public @Optional bool bot;
 	///Whether the user has multifactor authentication enabled
 	public @Optional bool mfaEnabled;
 	///Whether the user is verified
-	public bool verified;
+	public @Optional bool verified;
 	///The flags on the account of the user
 	public @Optional int flags;
 	///The type of premium the user has
 	public @Optional int premiumType;
-
-	public @property void id(string s) {
-		this._id = s.to!ulong;
-	}
-
-	public @property ulong id() {
-		return _id;
-	}
 
 	///Whether the user is a Discord employee
 	public @property bool employee(){
@@ -834,22 +840,22 @@ struct Activity{//TODO missing rich game info
 *	}
 * ---
 */
-struct Emoji{
+struct Emoji {
 	///The name of the emoji
 	public string name;
 	///The ids of the roles whitelisted for the emoji
-	public ulong[] roleIds;
+	public @Optional @Named("roles") ulong[] roleIds;
 	///The id of the emoji if custom
-	public Nullable!ulong id;
+	public @Optional ulong id;
 	///The id of the user who created the emoji
-	public Nullable!ulong userId;
+	public @Ignored ulong userId;
 	///Whether the emoji is animated
-	public Nullable!bool animated;
+	public @Optional bool animated;
 	///Whether the emoji is managed
-	public Nullable!bool managed;
+	public @Optional bool managed;
 	///Whether the emoji requires colons
-	public Nullable!bool requireColons;
-	this(Json json){
+	public @Optional @Named("require_colons") bool requireColons;
+	/*this(Json json){
 		name = json["name"].get!string;
 		if(json["id"].type != Json.Type.null_) id = json["id"].get!string.to!ulong;
 		if(json["user"].type != Json.Type.undefined && json["user"]["id"].type != Json.Type.undefined) userId = json["user"]["id"].get!string.to!ulong;
@@ -857,7 +863,7 @@ struct Emoji{
 		managed.safeAssign(json, "managed");
 		requireColons.safeAssign(json, "require_colons");
 		if(json["roles"].type != Json.Type.undefined) roleIds = json["roles"][].map!(r => r.get!string.to!ulong).array;
-	}
+	}*/
 	this(string name, ulong id) {
 		this.name = name;
 		this.id = id;
@@ -866,9 +872,12 @@ struct Emoji{
 	this(string name){
 		this.name = name;
 	}
+	private @property void user(User u) {
+		userId = u.id;
+	}
 	///Whether the emoji is custom
 	public @property bool custom(){
-		return !id.isNull;
+		return id != 0;
 	}
 	///The rich name of the emoji in the format name:id, used by reaction endpoints
 	public @property string richName(){
@@ -880,11 +889,11 @@ struct Emoji{
 		if(!custom) return name;
 		else return "<:" ~ name ~ ":" ~ id.to!string ~ ">";
 	}
-	public const bool opEquals(Emoji e){
+	public bool opEquals(const Emoji e){
 		return name == e.name && id == e.id;
 	}
-	public const bool opEquals(string s){
-		return id.isNull && name == s;
+	public bool opEquals(const string s){
+		return id == 0 && name == s;
 	}
 }
 //I haven't decided if I think this is a terrible hack but I think that I've decided that it's terrible
@@ -905,34 +914,47 @@ private void safeAssign(T)(ref T var, Json json, string name){
 	}
 }
 
-T parseJsonToStruct(T)(Json json) {
-	static assert(is(T == struct), "T must be a struct");
-	alias TYPES = Fields!T;
+T parseTypeFromJson(T, J)(J json)
+if (isAggregateType!T) {
 	T val;
-	foreach (enum int i, enum string name; FieldNameTuple!T) {
-		mixin("enum bool ignored = hasUDA!(val." ~ name ~ ", Ignored);");
-		static if (!ignored) {
-			mixin("enum bool required = !hasUDA!(val." ~ name ~ ", Optional);");
-			Json j = json[name];
+	static if (is(T == class)) {
+		val = new T();
+	}
+
+	foreach (enum member; __traits(allMembers, T)) {
+		alias PARAM = __traits(getMember, T, member);
+		static if (((isFunction!PARAM && hasFunctionAttributes!(PARAM, "@property") && arity!PARAM == 1) || [FieldNameTuple!T].canFind(member)) && !hasUDA!(PARAM, Ignored)) {
+			static if (isFunction!(PARAM)) {
+				alias TYPE = Parameters!PARAM[0]; // @property function
+			} else {
+				alias TYPE = typeof(PARAM);
+			}
 			try {
-				static if (is(TYPES[i] == struct)) {
-					mixin("val." ~ name ~ " = parseJsonToStruct!(TYPES[i])(j);");
-				} else static if (!is(TYPES[i] == string) && isArray!(TYPES[i])) {
-					foreach (Json element; j) {
-						static if (is(ElementType!(TYPES[i]) == struct)) {
-							mixin("val." ~ name ~ " ~= parseJsonToStruct!(ElementType!(TYPES[i]))(element);");
+				static if (hasUDA!(PARAM, Named)) {
+					auto j = json[getUDAs!(PARAM, Named)[0].name];
+				} else {
+					auto j = json[member];
+				}
+				static if (is(TYPE == ulong)) {
+					__traits(getMember, val, member) = j.get!string.to!TYPE;
+				} else static if (is(TYPE == struct)) {
+					__traits(getMember, val, member) = parseTypeFromJson!TYPE(j);
+				} else static if (isArray!TYPE && !is(TYPE == string)) {
+					foreach (size_t index, J element; j) {
+						static if (is(ElementType!TYPE == ulong)) {
+							__traits(getMember, val, member) ~= j.get!string.to!(ElementType!TYPE);
+						} else static if (is(ElementType!TYPE == struct)) {
+							__traits(getMember, val, member) ~= parseTypeFromJson!(ElementType!TYPE)(element);
 						} else {
-							mixin("val." ~ name ~ " ~= element.get!(ElementType!(TYPES[i]));");
+							__traits(getMember, val, member) ~= element.get!(ElementType!TYPE);
 						}
 					}
 				} else {
-					mixin("val." ~ name ~ " = j.get!(TYPES[i]);");
+					__traits(getMember, val, member) = j.get!TYPE;
 				}
 			} catch (Exception e) {
-				if (required) {
-					import std.stdio: writeln;
-					writeln(e);
-					throw new Exception("Required value missing or incorrectly typed: " ~ (T).stringof ~ "." ~ name);
+				if (!hasUDA!((PARAM), Optional)) {
+					throw new Exception("Required value missing or incorrectly typed: " ~ (T).stringof ~ "." ~ member);
 				}
 			}
 		}
